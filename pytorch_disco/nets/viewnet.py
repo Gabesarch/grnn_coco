@@ -24,7 +24,7 @@ class ViewNet(nn.Module):
         self.emb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=hyp.feat_dim, kernel_size=1, stride=1, padding=0).cuda()
         self.rgb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=3, kernel_size=1, stride=1, padding=0).cuda()
 
-    def forward(self, feat, rgb_g, valid, summ_writer,name):
+    def forward(self, feat, rgb_g, valid, summ_writer,name,just_return_rgbe=False):
         total_loss = torch.tensor(0.0).cuda()
         if hyp.dataset_name == "clevr":
             valid = torch.ones_like(valid)
@@ -35,6 +35,9 @@ class ViewNet(nn.Module):
         # postproc
         emb_e = l2_normalize(emb_e, dim=1)
         rgb_e = torch.nn.functional.tanh(rgb_e)*0.5
+
+        if just_return_rgbe:
+            return rgb_e
 
         loss_im = l1_on_axis(rgb_e-rgb_g, 1, keepdim=True)
         summ_writer.summ_oned('view/rgb_loss', loss_im*valid)

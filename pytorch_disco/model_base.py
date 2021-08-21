@@ -354,7 +354,8 @@ class Model(object):
                             filename_e = feed.pop('filename_e')
                             filename_g = feed.pop('filename_g')
                         if hyp.dataset_name == "replica" or hyp.dataset_name == "carla_mix":
-                            classes = feed.pop('classes')
+                            pass
+                            # classes = feed.pop('classes')
 
                         for k in feed:
                             feed_cuda[k] = feed[k].cuda(non_blocking=True).float()
@@ -368,8 +369,9 @@ class Model(object):
                             feed_cuda['filename_g'] = filename_g
                         
                         if hyp.dataset_name == "replica" or hyp.dataset_name == "carla_mix":
-                            classes = np.transpose(np.array(classes))
-                            feed_cuda['classes'] = classes
+                            pass
+                            # classes = np.transpose(np.array(classes))
+                            # feed_cuda['classes'] = classes
 
                         feed_cuda['writer'] = set_writer
                         feed_cuda['global_step'] = step

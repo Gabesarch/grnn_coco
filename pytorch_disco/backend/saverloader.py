@@ -31,6 +31,7 @@ def load_weights(model, optimizer):
                  "occnet": hyp.occ_init,
                  "preoccnet": hyp.preocc_init,
         }
+        print(inits)
         iter = 0
         for part, init in list(inits.items()):
             # st()
@@ -138,6 +139,7 @@ def load_part(model, part, init):
                         continue
                     else:
                         if model_para_name in model_state_dict.keys():
+                            print(model_para_name)
                             model_state_dict[model_para_name].copy_(para.data)
                 else:
                     if part+"."+model_para_name != load_para_name:

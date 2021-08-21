@@ -15,6 +15,9 @@ import imageio
 from itertools import combinations
 from tensorboardX import SummaryWriter
 
+import matplotlib.pyplot as plt
+from matplotlib import cm 
+
 
 from utils_basic import *
 import utils_basic
@@ -395,6 +398,19 @@ class Summ_writer(object):
 			self.log_freq = log_freq
 		
 		self.save_this = (self.global_step % self.log_freq == 0)
+
+	def summ_depth(self, name, depth, blacken_zeros=False, cmap='YlGnBu_r'):
+		if self.save_this:
+			depth[depth==100.] = np.max(depth[depth<100.])
+			figure = plt.figure(figsize = (20,14))
+			plt.clf()
+			plt.imshow(depth, cmap=cmap)
+			plt.axis('off')
+			# figure.axes.get_xaxis().set_visible(False)
+			# figure.axes.get_yaxis().set_visible(False)
+			# figure is matplotlib figure
+			self.writer.add_figure(name, figure, global_step=self.global_step) 
+			plt.close('all')
 		
 	
 	def summ_text(self, name, text):

@@ -11,7 +11,8 @@ import ipdb
 st = ipdb.set_trace
 import utils_improc
 import utils_geom
-from scipy.misc import imresize
+# from scipy.misc import imresize
+import cv2
 
 class TFRecordDataset():
 
@@ -163,8 +164,8 @@ class NpzRecordDataset(torch.utils.data.Dataset):
         
         if hyp.dataset_name =="replica":
             d['tree_seq_filename'] = "temp"
-            object_category = d['object_category_names']
-            bbox_origin = d['bbox_origin']
+            # object_category = d['object_category_names']
+            # bbox_origin = d['bbox_origin']
         
 
         if hyp.dataset_name=="carla":
@@ -208,7 +209,7 @@ class NpzRecordDataset(torch.utils.data.Dataset):
             d['predicted_box'] = predicted_box.astype(np.float32)
             d['predicted_scores'] = score.astype(np.float32)
 
-        if hyp.dataset_name=="replica":
+        if False: #hyp.dataset_name=="replica":
             if len(bbox_origin) == 0:
                 score = np.zeros([hyp.N])
                 bbox_origin = np.zeros([hyp.N,6])
