@@ -5,8 +5,6 @@ st = ipdb.set_trace
 # THIS FILE IS FOR STORING STANDARD EXPERIMENTS/BASELINES FOR CARLA_STA MODE
 ############## choose an experiment ##############
 
-# python main.py cs --en replica_multiview_trainer2 --rn test00
-
 current = '{}'.format(os.environ["exp_name"])
 
 
@@ -36,29 +34,6 @@ exps['replica_multiview_trainer2'] = [
     'train_occ',
     'train_view',
     # 'pretrained_feat',
-    # 'pretrained_occ',    
-    # 'pretrained_view',    
-    # 'eval_boxes',
-    # 'debug',
-    # 'vis_clusters',
-    # 'eval_recall_o_quicker',   
-    # 'orient_tensors_in_eval_recall_o',    
-    # 'profile_time',
-    'fast_logging',
-]
-
-exps['replica_multiview_trainer_pretrain'] = [
-    'replica_sta', # mode
-    'replica_train', # dataset
-    '200k_iters',
-    'lr3',
-    'B2',
-    # 'no_shuf',
-    'reset_iter',
-    'train_feat',
-    # 'train_occ',
-    # 'train_view',
-    'pretrained_feat',
     # 'pretrained_occ',    
     # 'pretrained_view',    
     # 'eval_boxes',

@@ -267,6 +267,44 @@ def get_random_rt(B,
     rt = merge_rt(r, t)
     return rt
 
+def get_rt_rot(B,
+                  r_amount=5.0,
+                  t_amount=1.0,
+                  sometimes_zero=False):
+    # t_amount is in meters
+    # r_amount is in degrees
+    
+    r_amount = np.pi/180.0*r_amount
+
+    ## translation
+    tx = 0.5 * np.ones(B).astype(np.float32) #np.random.uniform(-t_amount, t_amount, size=B).astype(np.float32)
+    ty = np.zeros(B).astype(np.float32) #np.random.uniform(-t_amount/2.0, t_amount/2.0, size=B).astype(np.float32)
+    tz = np.zeros(B).astype(np.float32) #np.random.uniform(-t_amount, t_amount, size=B).astype(np.float32)
+    
+    ## rotation
+    rx = np.zeros(B).astype(np.float32) #np.random.uniform(-r_amount/2.0, r_amount/2.0, size=B).astype(np.float32)
+    ry = np.zeros(B).astype(np.float32) #np.random.uniform(-r_amount, r_amount, size=B).astype(np.float32)
+    rz = np.zeros(B).astype(np.float32) #r_amount * np.ones(B).astype(np.float32) #np.random.uniform(-r_amount/2.0, r_amount/2.0, size=B).astype(np.float32)
+
+    # if sometimes_zero:
+    #     rand = np.random.uniform(0.0, 1.0, size=B).astype(np.float32)
+    #     prob_of_zero = 0.5
+    #     rx = np.where(np.greater(rand, prob_of_zero), rx, np.zeros_like(rx))
+    #     ry = np.where(np.greater(rand, prob_of_zero), ry, np.zeros_like(ry))
+    #     rz = np.where(np.greater(rand, prob_of_zero), rz, np.zeros_like(rz))
+    #     tx = np.where(np.greater(rand, prob_of_zero), tx, np.zeros_like(tx))
+    #     ty = np.where(np.greater(rand, prob_of_zero), ty, np.zeros_like(ty))
+    #     tz = np.where(np.greater(rand, prob_of_zero), tz, np.zeros_like(tz))
+        
+    t = np.stack([tx, ty, tz], axis=1)
+    t = torch.from_numpy(t)
+    rx = torch.from_numpy(rx)
+    ry = torch.from_numpy(ry)
+    rz = torch.from_numpy(rz)
+    r = eul2rotm(rx, ry, rz)
+    rt = merge_rt(r, t)
+    return rt
+
 def convert_boxlist_to_lrtlist(boxlist):
     B, N, D = list(boxlist.shape)
     boxlist_ = boxlist.view(B*N, D)

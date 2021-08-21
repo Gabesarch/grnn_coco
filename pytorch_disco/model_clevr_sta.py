@@ -323,7 +323,7 @@ class ClevrStaNet(nn.Module):
         occXs = __u(utils_vox.voxelize_xyz(__p(xyz_camXs), Z, Y, X))
 
         occXs_to_Rs = utils_vox.apply_4x4s_to_voxs(camRs_T_camXs, occXs) # torch.Size([2, 2, 1, 144, 144, 144])
-        occXs_to_Rs_45 = cross_corr.rotate_tensor_along_y_axis(occXs_to_Rs, 45)
+        # occXs_to_Rs_45 = cross_corr.rotate_tensor_along_y_axis(occXs_to_Rs, 45)
 
         occXs_half = __u(utils_vox.voxelize_xyz(__p(xyz_camXs), Z2, Y2, X2))
 
@@ -371,7 +371,7 @@ class ClevrStaNet(nn.Module):
         if summ_writer.save_this:
             summ_writer.summ_occs('3D_inputs/occRs', torch.unbind(occRs, dim=1))
             summ_writer.summ_occs('3D_inputs/occXs_to_Rs', torch.unbind(occXs_to_Rs, dim=1))
-            summ_writer.summ_occs('3D_inputs/occXs_to_Rs_45', torch.unbind(occXs_to_Rs_45, dim=1))
+            # summ_writer.summ_occs('3D_inputs/occXs_to_Rs_45', torch.unbind(occXs_to_Rs_45, dim=1))
             summ_writer.summ_unps('3D_inputs/unpRs', torch.unbind(unpRs, dim=1), torch.unbind(occRs, dim=1))
 
         #####################
