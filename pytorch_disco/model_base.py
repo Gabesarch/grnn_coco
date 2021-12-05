@@ -20,6 +20,7 @@ import utils_eval
 import utils_improc
 import utils_basic
 import ipdb
+import os
 st = ipdb.set_trace
 from collections import defaultdict
 import cross_corr
@@ -35,7 +36,8 @@ class Model(object):
         print(hyp.name)
         self.checkpoint_dir = checkpoint_dir
         self.log_dir = log_dir
-        self.all_inputs = inputs.get_inputs()
+        if os.environ["run_name"] != "grnn":
+            self.all_inputs = inputs.get_inputs()
         print("------ Done getting inputs ------")
 
         if hyp.do_orientation:
