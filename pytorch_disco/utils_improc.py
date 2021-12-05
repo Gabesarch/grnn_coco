@@ -401,7 +401,8 @@ class Summ_writer(object):
 
 	def summ_depth(self, name, depth, blacken_zeros=False, cmap='YlGnBu_r'):
 		if self.save_this:
-			depth[depth==100.] = np.max(depth[depth<100.])
+			if list(depth[depth==100.]):
+				depth[depth==100.] = np.max(depth[depth<100.])
 			figure = plt.figure(figsize = (20,14))
 			plt.clf()
 			plt.imshow(depth, cmap=cmap)
@@ -417,7 +418,11 @@ class Summ_writer(object):
 		assert isinstance(text,str)
 		self.writer.add_text(name, text , global_step=self.global_step)
 
-
+	def summ_figure(self, name, figure, blacken_zeros=False):
+        # figure is matplotlib figure
+        # if self.save_this or self.override: 
+		if self.save_this or True:
+			self.writer.add_figure(name, figure, global_step=self.global_step) 
 
 	def summ_gif(self, name, tensor, blacken_zeros=False):
 		# tensor should be in B x S x C x H x W
