@@ -14,8 +14,8 @@ class Net3D2D(nn.Module):
         self.pool = nn.ModuleList(pool)
 
         # one 3d conv
-        in_dims = [in_chans]
-        out_dims = [mid_chans]
+        in_dims = [in_chans, mid_chans]
+        out_dims = [mid_chans, mid_chans]
         ksize = 3
         stride = 1
         padding = 1
@@ -30,8 +30,8 @@ class Net3D2D(nn.Module):
         # (reshape 3d to 2d done in forward pass)
             
         # a couple 2d convs
-        in_dims = [mid_chans*int(depth/depth_pool), mid_chans*2]
-        out_dims = [mid_chans*2, mid_chans*4]
+        in_dims = [mid_chans*int(depth/depth_pool), mid_chans*2, mid_chans*4, mid_chans*4]
+        out_dims = [mid_chans*2, mid_chans*4, mid_chans*4, mid_chans*4]
         ksize = 3
         stride = 1
         padding = 1
