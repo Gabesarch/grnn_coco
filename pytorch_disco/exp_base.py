@@ -5,6 +5,64 @@ exps = {}
 groups = {}
 group_parents = {}
 
+# SIZE = 8
+# SIZE_val = 8
+# SIZE = 32
+# SIZE_val = 32
+# SIZE = 20
+# SIZE_val = 20
+# SIZE_test = 20
+# SIZE = 32
+# SIZE_val = 32
+# SIZE_test = 32
+# SIZE = 16
+# SIZE_val = 16
+# SIZE_test = 16
+# groups['carla_16-8-16_bounds_train'] = [
+#     'XMIN = -16.0', # right (neg is left)
+#     'XMAX = 16.0', # right
+#     'YMIN = -8.0', # down (neg is up)
+#     'YMAX = 8.0', # down
+#     'ZMIN = -16.0', # forward
+#     'ZMAX = 16.0', # forward
+#     'Z = %d' % (int(SIZE*8)),
+#     'Y = %d' % (int(SIZE*4)),
+#     'X = %d' % (int(SIZE*8)),
+# ]
+# groups['16-16-16_bounds_train'] = [
+#     'XMIN = -16.0', # right (neg is left)
+#     'XMAX = 16.0', # right
+#     'YMIN = -16.0', # down (neg is up)
+#     'YMAX = 16.0', # down
+#     'ZMIN = -16.0', # forward
+#     'ZMAX = 16.0', # forward
+#     'Z = %d' % (int(SIZE*4)),
+#     'Y = %d' % (int(SIZE*4)),
+#     'X = %d' % (int(SIZE*4)),
+# ]
+# groups['8-8-8_bounds_train'] = [
+#     'XMIN = -8.0', # right (neg is left)
+#     'XMAX = 8.0', # right
+#     'YMIN = -8.0', # down (neg is up)
+#     'YMAX = 8.0', # down
+#     'ZMIN = -8.0', # forward
+#     'ZMAX = 8.0', # forward  
+#     'Z = %d' % (int(SIZE*4)),
+#     'Y = %d' % (int(SIZE*4)),
+#     'X = %d' % (int(SIZE*4)),
+# ]
+# groups['8-8-8_bounds_train_replica_carla'] = [
+#     'XMIN = -3.4', # right (neg is left)
+#     'XMAX = 3.4', # right
+#     'YMIN = -3.4', # down (neg is up)
+#     'YMAX = 3.4', # down
+#     'ZMIN = 0.0', # forward
+#     'ZMAX = 6.8', # forward    
+#     'Z = %d' % (int(SIZE*4)),
+#     'Y = %d' % (int(SIZE*4)),
+#     'X = %d' % (int(SIZE*4)),
+# ]
+
 ############## preprocessing/shuffling ##############
 
 ############## modes ##############
@@ -23,6 +81,8 @@ groups['carla_obj'] = ['do_carla_obj = True']
 groups['mujoco_offline'] = ['do_mujoco_offline = True']
 
 ############## extras ##############
+groups['start1'] = ['start_at_iter1 = True']
+
 groups['rotate_combinations'] = ['gt_rotate_combinations = True']
 groups['use_gt_centers'] = ['use_gt_centers = True']
 groups['add_det_boxes'] = ['add_det_boxes = True']
@@ -222,6 +282,52 @@ groups['no_logging'] = ['log_freq_train = 100000000000',
                         'log_freq = 100000000000',                        
 ]
 
+groups['log1'] = [
+    'log_freq_train = 1',
+    'log_freq_val = 1',
+    'log_freq_test = 1',
+]
+groups['log5'] = [
+    'log_freq_train = 5',
+    'log_freq_val = 5',
+    'log_freq_test = 5',
+]
+groups['log10'] = [
+    'log_freq_train = 10',
+    'log_freq_val = 10',
+    'log_freq_test = 10',
+]
+groups['log50'] = [
+    'log_freq_train = 50',
+    'log_freq_val = 50',
+    'log_freq_test = 50',
+]
+groups['log11'] = [
+    'log_freq_train = 11',
+    'log_freq_val = 11',
+    'log_freq_test = 11',
+]
+groups['log53'] = [
+    'log_freq_train = 53',
+    'log_freq_val = 53',
+    'log_freq_test = 53',
+]
+groups['log100'] = [
+    'log_freq_train = 100',
+    'log_freq_val = 100',
+    'log_freq_test = 100',
+]
+groups['log500'] = [
+    'log_freq_train = 500',
+    'log_freq_val = 500',
+    'log_freq_test = 500',
+]
+groups['log5000'] = [
+    'log_freq_train = 5000',
+    'log_freq_val = 5000',
+    'log_freq_test = 5000',
+]
+
 
 
 groups['fastest_logging_group'] = ['log_freq = 1',
@@ -239,9 +345,20 @@ groups['slower_logging_group'] = ['log_freq = 1000',
 ]
 groups['no_logging_group'] = ['log_freq = 100000000000',                        
 ]
+
+groups['snap50'] = ['snap_freq = 50']
+groups['snap100'] = ['snap_freq = 100']
+groups['snap500'] = ['snap_freq = 500']
+groups['snap1k'] = ['snap_freq = 1000']
+groups['snap5k'] = ['snap_freq = 5000']
 # ############## pretrained nets ##############
 groups['pretrained_feat'] = ['do_feat = True',
                              'feat_init = "' + pret_clevr.feat_init + '"',
+                             # 'feat_do_vae = ' + str(pret_clevr.feat_do_vae),
+                             # 'feat_dim = %d' % pret_clevr.feat_dim,
+]
+groups['pretrained_feat3d'] = ['do_feat3d = True',
+                             'feat3d_init = "' + pret_clevr.feat3d_init + '"',
                              # 'feat_do_vae = ' + str(pret_clevr.feat_do_vae),
                              # 'feat_dim = %d' % pret_clevr.feat_dim,
 ]
@@ -251,6 +368,9 @@ groups['pretrained_view'] = ['do_view = True',
                              # 'view_use_halftanh = ' + str(pret_clevr.view_use_halftanh),
                              # 'view_pred_embs = ' + str(pret_clevr.view_pred_embs),
                              # 'view_pred_rgb = ' + str(pret_clevr.view_pred_rgb),
+]
+groups['pretrained_gqn'] = ['do_gqn = True',
+                             'gqn_init = "' + pret_clevr.gqn_init + '"',
 ]
 groups['pretrained_det'] = ['det_init = "' + pret_clevr.det_init + '"',
                              # 'view_depth = %d' %  pret_clevr.view_depth,
@@ -274,6 +394,10 @@ groups['pretrained_tow'] = ['do_tow = True',
 ]
 groups['pretrained_emb2D'] = ['do_emb2D = True',
                               'emb2D_init = "' + pret_clevr.emb2D_init + '"',
+                              # 'emb_dim = %d' % pret_clevr.emb_dim,
+]
+groups['pretrained_emb3d'] = ['do_emb3d = True',
+                              'emb3d_init = "' + pret_clevr.emb3d_init + '"',
                               # 'emb_dim = %d' % pret_clevr.emb_dim,
 ]
 groups['pretrained_occ'] = ['do_occ = True',

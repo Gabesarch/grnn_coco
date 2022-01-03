@@ -18,7 +18,10 @@ def load_weights(model, optimizer):
     else:
         start_iter = 0
         inits = {"featnet": hyp.feat_init,
+                # "emb3d": hyp.emb3d_init,
+                "feat3dnet": hyp.feat3d_init,
                  "viewnet": hyp.view_init,
+                 "gqn": hyp.gqn_init,
                  "visnet": hyp.vis_init,
                  "flownet": hyp.flow_init,
                  "embnet2D": hyp.emb2D_init,
@@ -35,11 +38,16 @@ def load_weights(model, optimizer):
         iter = 0
         for part, init in list(inits.items()):
             # st()
+            print(part, init)
             if init:
                 if part == 'featnet':
                     model_part = model.featnet
+                elif part == 'feat3dnet':
+                    model_part = model.feat3dnet
                 elif part == 'viewnet':
                     model_part = model.viewnet
+                elif part == 'gqn':
+                    model_part = model.gqn
                 elif part == 'occnet':
                     model_part = model.occnet
                 elif part == 'quantizer':
@@ -57,6 +65,7 @@ def load_weights(model, optimizer):
                 else:
                     assert(False)
                 iter = load_part(model_part, part, init)
+                print(part)
                 if iter:
                     print("loaded %s at iter %d" % (init, iter))
                 else:

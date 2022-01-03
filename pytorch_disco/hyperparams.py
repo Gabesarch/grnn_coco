@@ -22,6 +22,9 @@ X = 128
 PH = int(128/4)
 PW = int(384/4)
 
+start_at_iter1 = False
+do_midas_depth_estimation = False
+
 # ZY = 32
 # ZX = 32
 # ZZ = 16
@@ -30,7 +33,66 @@ N = 50 # number of boxes produced by the rcnn (not all are good)
 K = 1 # number of boxes to actually use
 S = 2 # seq length
 T = 256 # height & width of birdview map
+V = 100000 # num velodyne points 
+
+Z = 128
+Y = 64
+X = 128
+Z_val = 128
+Y_val = 64
+X_val = 128
+Z_test = 128
+Y_test = 64
+X_test = 128
+Z_zoom = 128
+Y_zoom = 64
+X_zoom = 128
+
+PH = int(128/4)
+PW = int(384/4)
+
+ZY = 32
+ZX = 32
+ZZ = 32
+
+N = 50 # number of boxes produced by the rcnn (not all are good)
+K = 1 # number of boxes to actually use
+S = 2 # seq length
+S_test = 3 # seq length
+T = 256 # height & width of birdview map
 V = 100000 # num velodyne points
+
+do_carla_gqn = False
+do_gqn = False
+gqn_representation = 'pool'
+
+# metric bounds of mem space 
+XMIN = -16.0 # right (neg is left)
+XMAX = 16.0 # right
+YMIN = -1.0 # down (neg is up)
+YMAX = 3.0 # down
+ZMIN = 2.0 # forward
+ZMAX = 34.0 # forward
+XMIN_val = -16.0 # right (neg is left)
+XMAX_val = 16.0 # right
+YMIN_val = -1.0 # down (neg is up)
+YMAX_val = 3.0 # down
+ZMIN_val = 2.0 # forward
+ZMAX_val = 34.0 # forward
+XMIN_test = -16.0 # right (neg is left)
+XMAX_test = 16.0 # right
+YMIN_test = -1.0 # down (neg is up)
+YMAX_test = 3.0 # down
+ZMIN_test = 2.0 # forward
+ZMAX_test = 34.0 # forward
+XMIN_zoom = -16.0 # right (neg is left)
+XMAX_zoom = 16.0 # right
+YMIN_zoom = -1.0 # down (neg is up)
+YMAX_zoom = 3.0 # down
+ZMIN_zoom = 2.0 # forward
+ZMAX_zoom = 34.0 # forward
+FLOOR = 2.65 # ground (2.65m downward from the cam)
+CEIL = (FLOOR-2.0) # 
 
 #----------- loading -----------#
 use_gt_centers = False
@@ -45,6 +107,8 @@ traj_init = ""
 occ_init = ""
 preocc_init = ""
 view_init = ""
+feat3d_init = ""
+gqn_init = ""
 quant_init = ""
 render_init = ""
 vis_init = ""
@@ -78,6 +142,8 @@ do_freeze_flow = False
 do_freeze_ego = False
 do_resume = False
 do_profile = False
+do_freeze_feat3d = False
+fit_vox = False
 
 # by default, only backprop on "train" iters
 backprop_on_train = True
@@ -131,6 +197,59 @@ do_render = False
 do_flow = False
 do_ego = False
 do_vis = False
+
+do_carla_moc = False
+trainset_format = "multiview"
+trainset_seqlen = 2
+dataset_filetype = "npz"
+do_feat3d = False
+feat3d_dim = 32
+feat3d_smooth_coeff = 0.0
+do_emb3d = False
+emb3d_mindist = 16.0
+emb3d_num_samples = 2
+emb3d_ce_coeff = 1.0
+do_rgb = False
+do_save_outputs = False
+#----------- emb hypers -----------#
+emb2d_smooth_coeff = 0.0
+emb3d_smooth_coeff = 0.0
+emb2d_ml_coeff = 0.0
+emb3d_ml_coeff = 0.0
+emb2d_l2_coeff = 0.0
+emb3d_l2_coeff = 0.0
+emb2d_mindist = 0.0
+emb3d_mindist = 0.0
+emb2d_num_samples = 0
+emb3d_num_samples = 0
+emb3d_ce_coeff = 0.0
+
+trainset_format = 'seq'
+valset_format = 'seq'
+testset_format = 'seq'
+# should the seqdim be taken in consecutive order
+trainset_consec = True
+valset_consec = True
+testset_consec = True
+
+trainset_seqlen = 2
+valset_seqlen = 2
+testset_seqlen = 2
+
+dataset_name = ""
+seqname = ""
+ind_dataset = ''
+
+trainset = ""
+valset = ""
+testset = ""
+
+dataset_location = ""
+
+dataset_filetype = "tf" # can be tf or npz
+
+feat3d_arch = 'enc3d'
+
 
 
 #----------- nel utils -----------#
@@ -286,7 +405,7 @@ for custom_max in ["emb_moc"]:
 #----------- general hypers -----------#
 lr = 0.0
 delete_old_checkpoints = True
-delete_checkpoints_older_than = 3
+delete_checkpoints_older_than = 10
 
 
 #----------- emb hypers -----------#
@@ -465,6 +584,10 @@ elif mode=="CARLA_MOT":
     exec(compile(open('exp_carla_mot.py').read(), 'exp_carla_mot.py', 'exec'))
 elif mode=="CARLA_FLO":
     exec(compile(open('exp_carla_flo.py').read(), 'exp_carla_flo.py', 'exec'))
+elif mode=="CARLA_MOC":
+    exec(compile(open('exp_carla_moc.py').read(), 'exp_carla_moc.py', 'exec'))
+elif mode=="CARLA_GQN":
+    exec(compile(open('exp_carla_gqn.py').read(), 'exp_carla_gqn.py', 'exec'))
 elif mode=="CARLA_OBJ":
     exec(compile(open('exp_carla_obj.py').read(), 'exp_carla_obj.py', 'exec'))
 elif mode=="CARLA_STA":
@@ -490,6 +613,10 @@ else:
     valset_path = "%s/%s.npy" % (dataset_location, valset)
     testset_path = "%s/%s.npy" % (dataset_location, testset)
 
+trainset_batch_size = B
+valset_batch_size = B
+testset_batch_size = B
+
 data_paths = {}
 data_paths['train'] = trainset_path
 data_paths['val'] = valset_path
@@ -511,6 +638,26 @@ shuffles = {}
 shuffles['train'] = shuffle_train
 shuffles['val'] = shuffle_val
 shuffles['test'] = shuffle_test
+
+data_formats = {}
+data_formats['train'] = trainset_format
+data_formats['val'] = valset_format
+data_formats['test'] = testset_format
+
+data_consecs = {}
+data_consecs['train'] = trainset_consec
+data_consecs['val'] = valset_consec
+data_consecs['test'] = testset_consec
+
+seqlens = {}
+seqlens['train'] = trainset_seqlen
+seqlens['val'] = valset_seqlen
+seqlens['test'] = testset_seqlen
+
+batch_sizes = {}
+batch_sizes['train'] = trainset_batch_size
+batch_sizes['val'] = valset_batch_size
+batch_sizes['test'] = testset_batch_size
 
 
 ############ autogen a name; don't touch any hypers! ############
