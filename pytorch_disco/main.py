@@ -1,4 +1,5 @@
-import click #argparse is behaving weirdly
+# import click #argparse is behaving weirdly
+import argparse
 import os
 import cProfile
 import logging
@@ -8,18 +9,31 @@ logger = logging.Logger('catch_all')
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ["LC_ALL"]= 'C.UTF-8'
 
-@click.command()
-@click.argument("mode", required=True)
-@click.option("--exp_name","--en", default="trainer_basic", help="execute expriment name defined in config")
-@click.option("--run_name","--rn", default="1", help="run name")
+# @click.command()
+# @click.argument("mode", required=True)
+# @click.option("--exp_name","--en", default="trainer_basic", help="execute expriment name defined in config")
+# @click.option("--run_name","--rn", default="1", help="run name")
+
+parser = argparse.ArgumentParser(description='experiment names & modes')
+parser.add_argument("--mode","--m", default="moc", help="experiment mode")
+parser.add_argument("--exp_name","--en", default="trainer_basic", help="execute expriment name defined in config")
+parser.add_argument("--run_name","--rn", default="1", help="run name")
+args = parser.parse_args()
 
 
-def main(mode, exp_name, run_name):
+def main():
+    mode = args.mode
+    exp_name = args.exp_name
+    run_name = args.run_name
     if mode:
         if "cs" == mode:
             mode = "CLEVR_STA"
         elif "nel" == mode:
             mode = "NEL_STA"
+        elif "moc" == mode:
+            mode = "CARLA_MOC"
+        elif "gqn" == mode:
+            mode = "CARLA_GQN"
     
     if run_name == "1":
         run_name = exp_name
@@ -31,6 +45,8 @@ def main(mode, exp_name, run_name):
     import hyperparams as hyp
     from model_nel_sta import NEL_STA    
     from model_clevr_sta import CLEVR_STA
+    from model_carla_moc import CARLA_MOC
+    from model_carla_gqn import CARLA_GQN
 
     checkpoint_dir_ = os.path.join("checkpoints", hyp.name)
 
@@ -40,6 +56,10 @@ def main(mode, exp_name, run_name):
         log_dir_ = os.path.join("logs_clevr_sta", hyp.name)    
     elif hyp.do_nel_sta:
         log_dir_ = os.path.join("logs_nel_sta", hyp.name)
+    elif hyp.do_carla_moc:
+        log_dir_ = os.path.join("logs_carla_moc", hyp.name)
+    elif hyp.do_carla_gqn:
+        log_dir_ = os.path.join("logs_carla_moc", hyp.name)
     else:
         assert(False) # what mode is this?
 
@@ -48,22 +68,30 @@ def main(mode, exp_name, run_name):
     if not os.path.exists(log_dir_):
         os.makedirs(log_dir_)
     # st()
-    try:
-        if hyp.do_clevr_sta:
-            model = CLEVR_STA(checkpoint_dir=checkpoint_dir_,
-                    log_dir=log_dir_)
-            model.go()        
-        elif hyp.do_nel_sta:
-            model = NEL_STA(checkpoint_dir=checkpoint_dir_,
-                    log_dir=log_dir_)
-            model.go()
-        else:
-            assert(False) # what mode is this?
+    # try:
+    if hyp.do_clevr_sta:
+        model = CLEVR_STA(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()        
+    elif hyp.do_nel_sta:
+        model = NEL_STA(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    elif hyp.do_carla_moc:
+        model = CARLA_MOC(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    elif hyp.do_carla_gqn:
+        model = CARLA_GQN(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    else:
+        assert(False) # what mode is this?
 
-    except (Exception, KeyboardInterrupt) as ex:
-        logger.error(ex, exc_info=True)
-        st()
-        log_cleanup(log_dir_)
+    # except (Exception, KeyboardInterrupt) as ex:
+    #     logger.error(ex, exc_info=True)
+    #     st()
+    #     log_cleanup(log_dir_)
 
 def log_cleanup(log_dir_):
     log_dirs = []

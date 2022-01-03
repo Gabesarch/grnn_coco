@@ -4,8 +4,16 @@ import hyperparams as hyp
 import torch
 import hardPositiveMiner
 from tensorboardX import SummaryWriter
-from backend import saverloader, inputs
-from backend import inputs as load_inputs
+import os
+if os.environ["MODE"] in ["CARLA_MOC", "CARLA_GQN"]:
+    from backend import saverloader
+    from backend import inputs2 as inputs
+    from backend import inputs2 as load_inputs
+    # from backend import inputs3 as inputs
+    # from backend import inputs3 as load_inputs
+else:
+    from backend import saverloader, inputs
+    from backend import inputs as load_inputs
 from torchvision import datasets, transforms
 from DoublePool import DoublePool_O
 from DoublePool import MOC_DICT,MOC_QUEUE_NORMAL
@@ -20,7 +28,7 @@ import utils_eval
 import utils_improc
 import utils_basic
 import ipdb
-import os
+# import os
 st = ipdb.set_trace
 from collections import defaultdict
 import cross_corr

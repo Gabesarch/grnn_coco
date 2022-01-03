@@ -14,14 +14,14 @@ import utils_basic
 import utils_misc
 
 class ViewNet(nn.Module):
-    def __init__(self):
+    def __init__(self, feat_dim):
         super(ViewNet, self).__init__()
 
         print('ViewNet...')
 
         self.med_dim = 32
-        self.net = encoder3D2D.Net3D2D(in_chans=hyp.feat_dim, mid_chans=32, out_chans=self.med_dim, depth=hyp.view_depth).cuda()
-        self.emb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=hyp.feat_dim, kernel_size=1, stride=1, padding=0).cuda()
+        self.net = encoder3D2D.Net3D2D(in_chans=feat_dim, mid_chans=32, out_chans=self.med_dim, depth=hyp.view_depth).cuda()
+        self.emb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=feat_dim, kernel_size=1, stride=1, padding=0).cuda()
         self.rgb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=3, kernel_size=1, stride=1, padding=0).cuda()
 
     def forward(self, feat, rgb_g, valid, summ_writer,name,just_return_rgbe=False):
@@ -34,7 +34,7 @@ class ViewNet(nn.Module):
         rgb_e = self.rgb_layer(feat)
         # postproc
         emb_e = l2_normalize(emb_e, dim=1)
-        rgb_e = torch.nn.functional.tanh(rgb_e)*0.5
+        rgb_e = torch.tanh(rgb_e)*0.5
 
         if just_return_rgbe:
             return rgb_e
