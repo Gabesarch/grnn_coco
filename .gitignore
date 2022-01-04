@@ -6,3 +6,4 @@ logs*/
 *.npy
 *.p
 *.gif
+pytorch_disco/torch-gqn/
