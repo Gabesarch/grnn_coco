@@ -3,3 +3,6 @@
 *.jpg
 pytorch_disco/checkpoints/
 logs*/
+*.npy
+*.p
+*.gif
