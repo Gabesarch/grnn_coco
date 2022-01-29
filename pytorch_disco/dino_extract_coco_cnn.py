@@ -253,6 +253,8 @@ class DINO(nn.Module):
             p.requires_grad = False
         model.eval()
 
+        st()
+
         self.initial_layers = nn.Sequential(
             model.conv1,
             model.bn1,

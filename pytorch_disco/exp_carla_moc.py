@@ -275,6 +275,8 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d_view_vox'] = [
     'snap5k', 
 ]
 
+###############
+# evaluate train or val or test
 exps['trainer_carla_replica_feat3d_enc3d_occ_view_vox_VAL'] = [
     'carla_moc', # mode
     # 'carla_and_replica_val',

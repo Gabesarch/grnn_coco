@@ -32,6 +32,8 @@ import utils.misc
 import utils.track
 import utils.vox
 
+from tqdm import tqdm
+
 np.set_printoptions(precision=2)
 np.random.seed(0)
 
@@ -96,7 +98,7 @@ class CARLA_MOC(Model):
                 set_dicts.append({})
                 set_loaders.append(iter(set_inputs[-1]))
 
-        for step in list(range(self.start_iter+1, hyp.max_iters+1)):
+        for step in tqdm(range(self.start_iter+1, hyp.max_iters+1)):
             for i, (set_input) in enumerate(set_inputs):
                 if step % len(set_input) == 0: #restart after one epoch. Note this does nothing for the tfrecord loader
                     set_loaders[i] = iter(set_input)
@@ -535,7 +537,7 @@ class CarlaMocModel(nn.Module):
             # print(rgb_e.shape)              
             total_loss += view_loss
 
-        self.summ_writer.summ_scalar(f'{set_name}_loss', total_loss.cpu().item())
+        self.summ_writer.summ_scalar(f'loss/{set_name}', total_loss.cpu().item())
         return total_loss, results, False
 
     def forward(self, feed):

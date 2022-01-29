@@ -135,7 +135,7 @@ layers = [
 ]
 
 set_name = 'enc3d_view07_fitvox'
-# set_name = 'GRNN_test02'
+set_name = 'GRNN_test03'
 print(set_name)
 
 checkpoint_dir='checkpoints/' + set_name
@@ -147,7 +147,7 @@ save_feats = True
 plot_classes = False
 only_process_stim_ids = False
 reduce_channels = False
-log_freq = 10000 # frequency for logging tensorboard
+log_freq = 1 #10000 # frequency for logging tensorboard
 # subj = 1 # subject number - supports: 1, 2, 7
 pretrain = True
 # print("SUBJECT:", subj)
@@ -257,20 +257,20 @@ class GRNN(nn.Module):
         # occnet 
         self.occ_conv = occnet.conv3d
 
-        self.W, self.H = 256, 256
-        self.fov = 90
-        self.hfov = float(self.fov) * np.pi / 180.
-        self.pix_T_camX = np.array([
-            [(self.W/2.)*1 / np.tan(self.hfov / 2.), 0., 0., 0.],
-            [0., (self.H/2.)*1 / np.tan(self.hfov / 2.), 0., 0.],
-            [0., 0.,  1, 0],
-            [0., 0., 0, 1]])
-        self.pix_T_camX[0,2] = self.W/2. 
-        self.pix_T_camX[1,2] = self.H/2.         
+        # self.W, self.H = 256, 256
+        # self.fov = 90
+        # self.hfov = float(self.fov) * np.pi / 180.
+        # self.pix_T_camX = np.array([
+        #     [(self.W/2.)*1 / np.tan(self.hfov / 2.), 0., 0., 0.],
+        #     [0., (self.H/2.)*1 / np.tan(self.hfov / 2.), 0., 0.],
+        #     [0., 0.,  1, 0],
+        #     [0., 0., 0, 1]])
+        # self.pix_T_camX[0,2] = self.W/2. 
+        # self.pix_T_camX[1,2] = self.H/2.         
 
         self.B = 1 
         # assert(self.B==1) # need B=1 for this - TODO: allow batching
-        self.pix_T_camX = torch.from_numpy(self.pix_T_camX).cuda().unsqueeze(0).repeat(self.B,1,1).float()
+        # self.pix_T_camX = torch.from_numpy(self.pix_T_camX).cuda().unsqueeze(0).repeat(self.B,1,1).float()
 
         # view prediction net
         self.viewnet_pool = viewnet.net.pool[0]
@@ -285,7 +285,7 @@ class GRNN(nn.Module):
         self.rgb_layer = viewnet.rgb_layer
 
     
-    def forward(self, feat_input, vox_util, pix_T_camX, summ_writer=None, norm=True):
+    def forward(self, feat_input, vox_util, pix_T_camX, W, H, summ_writer=None, norm=True):
 
         # self.pix_T_camX = pix_T_camX
 
@@ -315,14 +315,14 @@ class GRNN(nn.Module):
 
         occ_e_ = self.occ_conv(feat_halfmemX0)
 
-        PH, PW = self.H//2, self.W//2
-        sy = float(PH)/float(self.H)
-        sx = float(PW)/float(self.W)
+        PH, PW = H//2, W//2
+        sy = float(PH)/float(H)
+        sx = float(PW)/float(W)
         assert(sx==0.5) # else we need a fancier downsampler
         assert(sy==0.5)
-        projpix_T_cams = utils.geom.scale_intrinsics(self.pix_T_camX, sx, sy)
+        projpix_T_cams = utils.geom.scale_intrinsics(pix_T_camX, sx, sy)
 
-        rt = utils.geom.get_random_rt(self.B,r_amount=0.0,t_amount=0.0) # no rotation or translation
+        rt = torch.from_numpy(np.eye(4)).unsqueeze(0) #utils.geom.get_random_rt(self.B,r_amount=0.0,t_amount=0.0) # no rotation or translation
 
         # print(rt)
 
@@ -334,8 +334,8 @@ class GRNN(nn.Module):
         v0 = self.viewnet_layer0(vp)
         v1 = self.viewnet_layer1(v0)
 
-        B, C, D, H, W = list(v1.shape)
-        v1_2d = v1.view(B, C*D, H, W)
+        B, C, D, H2, W2 = list(v1.shape)
+        v1_2d = v1.view(B, C*D, H2, W2)
 
         v2 = self.viewnet_layer2(v1_2d)
         v3 = self.viewnet_layer3(v2)
@@ -492,7 +492,7 @@ class COCO_GRNN(nn.Module):
         # self.H = 256
         self.W = 384
         self.H = 384
-        self.fov = 60
+        self.fov = 90
         hfov = float(self.fov) * np.pi / 180.
         self.pix_T_camX = np.array([
             [(self.W/2.)*1 / np.tan(hfov / 2.), 0., 0., 0.],
@@ -610,7 +610,7 @@ class COCO_GRNN(nn.Module):
                 featXs_input = torch.cat([occXs, occXs*unpXs], dim=1)
                 # it is useful to keep track of what was visible from each viewpoint
                 with torch.no_grad():
-                    feats_all = self.grnn(featXs_input, vox_util, pix_T_camX, self.summ_writer)
+                    feats_all = self.grnn(featXs_input, vox_util, pix_T_camX, W_I,H_I, self.summ_writer)
 
                 # layer_ind = layer_map[layer]
                 feat_memX = feats_all[layer]

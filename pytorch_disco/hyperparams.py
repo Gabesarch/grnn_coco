@@ -405,7 +405,7 @@ for custom_max in ["emb_moc"]:
 #----------- general hypers -----------#
 lr = 0.0
 delete_old_checkpoints = True
-delete_checkpoints_older_than = 10
+delete_checkpoints_older_than = 5
 
 
 #----------- emb hypers -----------#
