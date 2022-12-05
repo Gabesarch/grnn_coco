@@ -24,8 +24,11 @@ class ViewNet(nn.Module):
         self.emb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=feat_dim, kernel_size=1, stride=1, padding=0).cuda()
         self.rgb_layer = nn.Conv2d(in_channels=self.med_dim, out_channels=3, kernel_size=1, stride=1, padding=0).cuda()
 
-    def forward(self, feat, rgb_g, valid, summ_writer,name,just_return_rgbe=False):
+    def forward(self, feat, rgb_g, valid, summ_writer,name,just_return_rgbe=False, set_name=None):
         total_loss = torch.tensor(0.0).cuda()
+        front_name = 'view'
+        if set_name is not None:
+            front_name = f'{front_name}_{set_name}'
         if hyp.dataset_name == "clevr":
             valid = torch.ones_like(valid)
         
@@ -40,13 +43,13 @@ class ViewNet(nn.Module):
             return rgb_e
 
         loss_im = l1_on_axis(rgb_e-rgb_g, 1, keepdim=True)
-        summ_writer.summ_oned('view/rgb_loss', loss_im*valid)
+        summ_writer.summ_oned(f'{front_name}/rgb_loss', loss_im*valid)
         rgb_loss = utils_basic.reduce_masked_mean(loss_im, valid)
 
-        total_loss = utils_misc.add_loss('view/rgb_l1_loss', total_loss, rgb_loss, hyp.view_l1_coeff, summ_writer)
+        total_loss = utils_misc.add_loss(f'{front_name}/rgb_l1_loss', total_loss, rgb_loss, hyp.view_l1_coeff, summ_writer)
 
-        # vis
-        summ_writer.summ_rgbs(f'view/{name}', [rgb_e, rgb_g])
+        # viss
+        summ_writer.summ_rgbs(f'{front_name}/{name}', [rgb_e, rgb_g])
 
         return total_loss, rgb_e, emb_e
 

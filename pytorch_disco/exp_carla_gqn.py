@@ -59,15 +59,41 @@ exps['val_only_gqn_pool'] = [
     'log1',
     'snap5k', 
 ]
+# Lescroart data
+exps['trainer_gqn_pool_lescroart'] = [
+    'lescroart_gqn', # mode
+    'mujoco_offline',  # mode
+    'mark_data',
+    # 'carla_surveil_multiview_train_data',
+    # 'carla_multiview_train_data',
+    # '16-8-16_bounds_train',
+    # '8-8-8_bounds_train',
+    # 'bounds_train_replica_carla',
+    'pretrained_gqn',
+    '200k_iters',
+    'lr4',
+    'B32',
+    'train_gqn_pool',
+    'log500',
+    # 'log1',
+    'snap5k', 
+]
 
 ############## net configs ##############
 
 groups['carla_gqn'] = ['do_carla_gqn = True']
 
+groups['lescroart_gqn'] = ['do_lescroart_gqn = True']
+
 groups['train_gqn_pool'] = [
     'do_gqn = True',
     'gqn_representation = "pool"',
 ]
+
+groups['mujoco_offline'] = ['do_mujoco_offline = True']
+groups['mujoco_offline_metric'] = ['do_mujoco_offline_metric = True']
+groups['mujoco_offline_metric_2d'] = ['do_mujoco_offline_metric_2d = True']
+groups['touch_embed'] = ['do_touch_embed = True']
 
 #K = 2 # how many objects to consider
 #N = 8 # how many objects per npz
@@ -141,6 +167,78 @@ groups['carla_and_replica_val'] = [
     'dataset_filetype = "npz"',
 ]
 
+groups['mark_data_small'] = ['dataset_name = "markdata"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 'trainset = "mark_data_small_train"',
+                                 'valset = "mark_data_small_train"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_data'] = ['dataset_name = "markdata"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 'trainset = "mark_data_train"',
+                                 'valset = "mark_data_train"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_location = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_val'] = ['dataset_name = "markdata_val"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'valset = "mark_testdata_test"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn1'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn1"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_testdata_trn2'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn2"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn3'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn3"',
+                                 #'dataset_list_dir = "/projects/katefgroup/datasets/markdata"',
+                                 'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn4'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn4"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
 ############## verify and execute ##############
 
 def _verify_(s):
@@ -163,4 +261,3 @@ s = "mod = " + mod
 _verify_(s)
 
 exec(s)
-

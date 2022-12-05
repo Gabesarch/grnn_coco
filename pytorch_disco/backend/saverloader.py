@@ -15,6 +15,7 @@ def load_weights(model, optimizer):
             print("loaded full model. resuming from iter %d" % start_iter)
         else:
             print("could not find a full model. starting from scratch")
+            assert(False)
     else:
         start_iter = 0
         inits = {"featnet": hyp.feat_init,
@@ -70,6 +71,7 @@ def load_weights(model, optimizer):
                     print("loaded %s at iter %d" % (init, iter))
                 else:
                     print("could not find a checkpoint for %s" % init)
+                    assert(False)
     start_iter = iter
     # st()
     if hyp.reset_iter:
@@ -104,6 +106,7 @@ def load(model_name, model, optimizer):
     step = 0
     if not os.path.exists(checkpoint_dir):
         print("...ain't no full checkpoint here!")
+        assert(False)
     else:
         ckpt_names = os.listdir(checkpoint_dir)
         steps = [int((i.split('-')[1]).split('.')[0]) for i in ckpt_names]
@@ -118,6 +121,7 @@ def load(model_name, model, optimizer):
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         else:
             print("...ain't no full checkpoint here!")
+            assert(False)
     return step
 
 
@@ -128,6 +132,7 @@ def load_part(model, part, init):
     step = 0
     if not os.path.exists(init_dir):
         print("...ain't no %s checkpoint here!"%(part))
+        assert(False)
     else:
         ckpt_names = os.listdir(init_dir)
         steps = [int((i.split('-')[1]).split('.')[0]) for i in ckpt_names]
@@ -158,6 +163,7 @@ def load_part(model, part, init):
                 #model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         else:
             print("...ain't no %s checkpoint here!"%(part))
+            assert(False)
     # st()
     return step
 

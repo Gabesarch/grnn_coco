@@ -5,7 +5,11 @@ import torch
 import hardPositiveMiner
 from tensorboardX import SummaryWriter
 import os
-if os.environ["MODE"] in ["CARLA_MOC", "CARLA_GQN"]:
+if os.environ["MODE"] in ["LESCROART_MOC", "LESCROART_GQN"] or hyp.do_lescroart_moc:
+    from backend import saverloader
+    from backend import inputs_lescroart as inputs
+    from backend import inputs_lescroart as load_inputs
+elif os.environ["MODE"] in ["CARLA_MOC", "CARLA_GQN"]:
     from backend import saverloader
     from backend import inputs2 as inputs
     from backend import inputs2 as load_inputs
@@ -44,7 +48,7 @@ class Model(object):
         print(hyp.name)
         self.checkpoint_dir = checkpoint_dir
         self.log_dir = log_dir
-        if os.environ["run_name"] != "grnn":
+        if os.environ["run_name"] != "grnn" and hyp.dataset_name1 is None:
             self.all_inputs = inputs.get_inputs()
         print("------ Done getting inputs ------")
 

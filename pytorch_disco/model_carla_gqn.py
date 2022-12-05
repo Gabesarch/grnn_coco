@@ -10,8 +10,13 @@ from backend import saverloader
 from torchvision.utils import make_grid, save_image
 
 from torchvision.transforms import ToTensor, Resize, ToPILImage, CenterCrop
+import os
 
-from backend import inputs2 as inputs
+if hyp.do_lescroart_gqn:
+    print('here')
+    from backend import inputs_lescroart as inputs
+else:
+    from backend import inputs2 as inputs
 
 from model_base import Model
 import sys
@@ -169,8 +174,10 @@ class CARLA_GQN(Model):
                     # print('set_do_backprop = %s' % set_do_backprop)
                           
                     read_start_time = time.time()
-
-                    feed, _ = next(set_loader)
+                    if hyp.do_lescroart_gqn:
+                        feed = next(set_loader)
+                    else:
+                        feed, _ = next(set_loader)
                     feed_cuda = {}
                     for k in feed:
                         try:
@@ -437,9 +444,10 @@ class CarlaGQNModel(nn.Module):
             #     x_q_hat_test = model.module.generate(x_test, v_test, v_q_test)
             # else:
             if self.summ_writer.save_this:
-                kl_test = self.gqn.kl_divergence(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1], self.rgb_camXs[:,1]+0.5)
-                x_q_rec_test = self.gqn.reconstruct(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1], self.rgb_camXs[:,1]+0.5)
-                x_q_hat_test = self.gqn.generate(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1])
+                with torch.no_grad():
+                    kl_test = self.gqn.kl_divergence(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1], self.rgb_camXs[:,1]+0.5)
+                    x_q_rec_test = self.gqn.reconstruct(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1], self.rgb_camXs[:,1]+0.5)
+                    x_q_hat_test = self.gqn.generate(self.rgb_camXs[:,0:1]+0.5, self.qgn_v[:,0:1], self.qgn_v[:,1])
                 
                 self.summ_writer.summ_scalar(f'{set_name}_kl', kl_test.mean())
                 self.summ_writer.summ_rgb(f'view/{set_name}_ground_truth', self.rgb_camXs[:,1])

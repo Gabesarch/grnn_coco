@@ -15,6 +15,25 @@ W = 320 # width
 # MW = 176*2
 # MD = 20
 
+arch = "vit_small"
+patch_size = 16
+out_dim = 65536
+norm_last_layer = True
+momentum_teacher = 0.996
+use_bn_in_head = False
+warmup_teacher_temp = 0.04
+teacher_temp = 0.04
+warmup_teacher_temp_epochs = 0
+use_fp16 = True
+lr = 0.0005
+global_crops_scale = (0.4, 1.)
+local_crops_number = 8
+local_crops_scale = (0.05, 0.4)
+drop_path_rate = 0.1
+epochs = 300
+dataparallel = False
+predict_view1_only = False
+
 Z = 128
 Y = 64
 X = 128
@@ -24,6 +43,8 @@ PW = int(384/4)
 
 start_at_iter1 = False
 do_midas_depth_estimation = False
+do_lescroart_gqn = False
+do_dino_multiview = False
 
 # ZY = 32
 # ZX = 32
@@ -144,6 +165,7 @@ do_resume = False
 do_profile = False
 do_freeze_feat3d = False
 fit_vox = False
+clip_bounds = None
 
 # by default, only backprop on "train" iters
 backprop_on_train = True
@@ -199,6 +221,7 @@ do_ego = False
 do_vis = False
 
 do_carla_moc = False
+do_omnidata_moc = False
 trainset_format = "multiview"
 trainset_seqlen = 2
 dataset_filetype = "npz"
@@ -286,6 +309,12 @@ maxm_max_iters = 100
 self_improve_iterate = False
 det_pool_size = 1000
 
+do_metric_learning = False
+do_mujoco_offline = False
+do_mujoco_offline_metric = False
+do_mujoco_offline_metric_2d = False
+do_touch_embed = False
+
 exp_do =False
 max_do = False
 exp_done = False
@@ -316,6 +345,33 @@ filter_boxes = False
 dict_distance_thresh = 1500.0
 neg_cs_thresh = 0.6
 pos_cs_thresh = 0.5
+
+dataset_name1 = None
+trainset1 = None
+valset1 = None
+dataset_list_dir1 = None
+dataset_location1 = None
+dataset_filetype1 = None
+trainset_format1 = None
+trainset_seqlen1 = None
+dataset_name2 = None
+trainset2 = None
+valset2 = None
+dataset_list_dir2 = None
+dataset_location2 = None
+dataset_filetype2 = None
+trainset_format2 = None
+trainset_seqlen2 = None
+dataset_name3 = None
+trainset3 = None
+valset3 = None
+dataset_list_dir3 = None
+dataset_location3 = None
+dataset_filetype3 = None
+trainset_format3 = None
+trainset_seqlen3 = None
+valset_format1 = None
+valset_seqlen1 = None
 
 do_pixor_det = False
 do_gt_pixor_det = False
@@ -405,7 +461,7 @@ for custom_max in ["emb_moc"]:
 #----------- general hypers -----------#
 lr = 0.0
 delete_old_checkpoints = True
-delete_checkpoints_older_than = 5
+delete_checkpoints_older_than = 3
 
 
 #----------- emb hypers -----------#
@@ -571,6 +627,7 @@ do_nel_sta = False
 do_carla_flo = False
 do_carla_obj = False
 do_mujoco_offline = False
+do_lescroart_moc = False
 
 GENERATE_PCD_BBOX = False
 
@@ -594,24 +651,36 @@ elif mode=="CARLA_STA":
     exec(compile(open('exp_carla_sta.py').read(), 'exp_carla_sta.py', 'exec'))
 elif mode=="NEL_STA":
     exec(compile(open('exp_nel_sta.py').read(), 'exp_nel_sta.py', 'exec'))
+elif mode=="DINO_MULTIVIEW":
+    exec(compile(open('exp_dino_multiview.py').read(), 'exp_dino_multiview.py', 'exec'))
 elif mode=="CLEVR_STA":
     exec(compile(open('exp_clevr_sta.py').read(), 'exp_clevr_sta.py', 'exec'))
 elif mode=="MUJOCO_OFFLINE":
     exec(compile(open('exp_mujoco_offline.py').read(), 'exp_mujoco_offline.py', 'exec'))
 elif mode=="CUSTOM":
     exec(compile(open('exp_custom.py').read(), 'exp_custom.py', 'exec'))
+elif mode=="LESCROART_MOC":
+    exec(compile(open('exp_lescroart_moc.py').read(), 'exp_lescroart_moc.py', 'exec'))
+elif mode=="LESCROART_GQN":
+    exec(compile(open('exp_carla_gqn.py').read(), 'exp_carla_gqn.py', 'exec'))
+elif mode=="OMNIDATA_MOC":
+    exec(compile(open('exp_omnidata_moc.py').read(), 'exp_omnidata_moc.py', 'exec'))
 else:
     assert(False) # what mode is this?
 
 ############ make some final adjustments ############
-if not do_mujoco_offline:
-    trainset_path = "%s/%s.txt" % (dataset_list_dir, trainset)
-    valset_path = "%s/%s.txt" % (dataset_list_dir, valset)
-    testset_path = "%s/%s.txt" % (dataset_list_dir, testset)
-else:
-    trainset_path = "%s/%s.npy" % (dataset_location, trainset)
-    valset_path = "%s/%s.npy" % (dataset_location, valset)
-    testset_path = "%s/%s.npy" % (dataset_location, testset)
+# if not do_mujoco_offline:
+#     trainset_path = "%s/%s.txt" % (dataset_list_dir, trainset)
+#     valset_path = "%s/%s.txt" % (dataset_list_dir, valset)
+#     testset_path = "%s/%s.txt" % (dataset_list_dir, testset)
+# else:
+#     trainset_path = "%s/%s.npy" % (dataset_location, trainset)
+#     valset_path = "%s/%s.npy" % (dataset_location, valset)
+#     testset_path = "%s/%s.npy" % (dataset_location, testset)
+
+trainset_path = "%s/%s.txt" % (dataset_list_dir, trainset)
+valset_path = "%s/%s.txt" % (dataset_list_dir, valset)
+testset_path = "%s/%s.txt" % (dataset_list_dir, testset)
 
 trainset_batch_size = B
 valset_batch_size = B

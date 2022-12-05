@@ -7,6 +7,62 @@ import numpy as np
 import ipdb
 st = ipdb.set_trace
 
+def unproject_pts_(pts, intrinsics, rgb=None, depth_scale=1., depth_trunc=1000.):
+    """
+    pts: N x 3
+
+    """
+    fx, fy, cx, cy = parse_intrinsics(intrinsics)
+    depth = pts[:,2]
+    # first scale the entire depth image
+    depth /= depth_scale
+
+    # form the mesh grid
+    # xv: 256 x 256, yv: 256 x 256, cx: 128
+    xv = pts[:,0]
+    yv = pts[:,1]
+    #, yv = np.meshgrid(np.arange(depth.shape[1], dtype=float), np.arange(depth.shape[0], dtype=float))
+    xv -= cx
+    xv /= fx
+    xv *= depth
+    yv -= cy
+    yv /= fy
+    yv *= depth
+    points = np.c_[xv.flatten(), yv.flatten(), depth.flatten()]
+
+    if rgb is not None:
+        # flatten it and add to the points
+        rgb = rgb.reshape(-1, 3)
+        points = np.concatenate((points, rgb), axis=1)
+
+    return points
+
+def unproject_pts(pts, intrinsics, origin_T_camX,
+    camR_T_origin=None, clip_radius=2.0, mujoco_py_scene=True,
+    vis_frame=True, do_vis=False):
+    """
+    pts: N x 3
+    intrinsics: 3 x 3
+    origin_T_camXs: 
+
+    """
+    xyz_camX = unproject_pts_(pts, intrinsics)
+    xyz_camX_homogenous = np.c_[xyz_camX, np.ones(len(xyz_camX))]
+    xyz_origin = np.dot(origin_T_camX, xyz_camX_homogenous.T).T
+    if camR_T_origin is not None:
+        xyz_camR = np.dot(camR_T_origin, xyz_origin.T).T
+    else:
+        xyz_camR = xyz_origin[:, :3]
+    
+    return xyz_camR
+
+def parse_intrinsics(intrinsics_mat):
+    fx = intrinsics_mat[0][0]
+    fy = intrinsics_mat[1][1]
+    cx = intrinsics_mat[0][2]
+    cy = intrinsics_mat[1][2]
+    return fx, fy, cx, cy
+
 def eye_2x2(B):
     rt = torch.eye(2, device=torch.device('cuda')).view(1,2,2).repeat([B, 1, 1])
     return rt
@@ -198,9 +254,9 @@ def pack_intrinsics(fx, fy, x0, y0):
     K[:,3,3] = 1.0
     return K
 
-def depth2pointcloud(z, pix_T_cam):
+def depth2pointcloud(z, pix_T_cam, cuda=True):
     B, C, H, W = list(z.shape)
-    y, x = utils.basic.meshgrid2d(B, H, W)
+    y, x = utils.basic.meshgrid2d(B, H, W, cuda=cuda)
     z = torch.reshape(z, [B, H, W])
     fx, fy, x0, y0 = split_intrinsics(pix_T_cam)
     xyz = Pixels2Camera(x, y, z, fx, fy, x0, y0)

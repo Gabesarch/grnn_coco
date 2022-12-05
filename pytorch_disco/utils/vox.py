@@ -8,6 +8,9 @@ import torch.nn.functional as F
 from utils.basic import *
 import utils.basic
 
+import ipdb
+st = ipdb.set_trace
+
 class Vox_util(object):
     def __init__(self, Z, Y, X, set_name, scene_centroid, bounds=None, assert_cube=True):
         # on every step, we create this object
@@ -353,7 +356,7 @@ class Vox_util(object):
         # grid_z, grid_y, grid_x = meshgrid3d(B, Z, Y, X)
         # # these are B x Z x Y x X
         # # these represent the mem grid coordinates
-
+        
         # # we need to convert these to pixel coordinates
         # x = torch.reshape(grid_x, [B, -1])
         # y = torch.reshape(grid_y, [B, -1])
@@ -362,7 +365,6 @@ class Vox_util(object):
         # xyz_mem = torch.stack([x, y, z], dim=2)
 
         xyz_camA = self.Mem2Ref(xyz_memA, Z, Y, X)
-
         xyz_pixB = utils.geom.apply_4x4(pixB_T_camA, xyz_camA)
         normalizer = torch.unsqueeze(xyz_pixB[:,:,2], 2)
         EPS=1e-6

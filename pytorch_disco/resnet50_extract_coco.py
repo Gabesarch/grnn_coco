@@ -55,21 +55,25 @@ np.random.seed(0)
 import ipdb
 st = ipdb.set_trace
 
+from torch.utils import model_zoo
+
 sys.path.append("/home/gsarch/repo/nsd/")
 from util.util import dimensionality_reduction_feats
 from sklearn.model_selection import train_test_split
 from featureprep.feature_prep import extract_feature_with_image_order
 
 sys.path.append("dino")
-import dino.utils
+import dino.dino_utils
 from vision_transformer import DINOHead
 
 ##########%%%%%%%%% PARAMETERS %%%%%%%%%%%%##################%%%%%%%%%%%%%%%%%########
-model_load = 'resnet50_trained_on_IN' # dino_replica_carla, simclr_replica_carla, resnet50_trained_on_IN, resnet50_trained_on_SIN, resnet50_trained_on_SIN_and_IN, resnet50_trained_on_SIN_and_IN_then_finetuned_on_IN
+model_load = 'resnet50_trained_on_SIN' # dino_replica_carla, simclr_replica_carla, resnet50_trained_on_IN, resnet50_trained_on_SIN, resnet50_trained_on_SIN_and_IN, resnet50_trained_on_SIN_and_IN_then_finetuned_on_IN
+model_load = 'vicregl_resnet50_alpha0p9'
+model_load = 'vicregl_resnet50_alpha0p75'
 only_process_stim_ids = False
 save_full_features = False # save full features
 save_subject_pca_features = True # save pca features for each subject (fit on training images, apply to testing images)
-write_to_excel = True # append info to model_info_file
+write_to_excel = False # append info to model_info_file
 log_freq = 30000 # frequency for logging tensorboard
 subjects = [1,2,3,4,5,6,7,8] # subjects to save pca for if save_subject_pca_features=True
 batch_size = 50 # batch size for images
@@ -86,23 +90,23 @@ num_layers_per_batch = 1 # number of layers to process at a time
 # ]
 layers = [
     'out_initial',
-        # 'out_1_0',
-        # 'out_1_1',
-        'out_1_2',
-        # 'out_2_0',
-        # 'out_2_1',
-        # 'out_2_2',
-        'out_2_3',
-        # 'out_3_0',
-        # 'out_3_1',
-        # 'out_3_2',
-        # 'out_3_3',
-        # 'out_3_4',
-        'out_3_5',
-        # 'out_4_0',
-        # 'out_4_1',
-        'out_4_2',
-        'out_avgpool',
+    # 'out_1_0',
+    # 'out_1_1',
+    'out_1_2',
+    # 'out_2_0',
+    # 'out_2_1',
+    # 'out_2_2',
+    'out_2_3',
+    # 'out_3_0',
+    # 'out_3_1',
+    # 'out_3_2',
+    # 'out_3_3',
+    # 'out_3_4',
+    'out_3_5',
+    # 'out_4_0',
+    # 'out_4_1',
+    'out_4_2',
+    'out_avgpool',
 ]
 if model_load in ["simclr_replica_carla", "dino_replica_carla"]:
     layers = layers + ['out_fc1','out_fc2']
@@ -204,10 +208,23 @@ class RESNET(nn.Module):
             pretrained = True
         elif model_load=='resnet50_trained_on_SIN':
             checkpoint = model_zoo.load_url(model_urls[model_load])
+            state_dict = checkpoint['state_dict']
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+            checkpoint['state_dict'] = state_dict
         elif model_load=='resnet50_trained_on_SIN_and_IN':
             checkpoint = model_zoo.load_url(model_urls[model_load])
+            state_dict = checkpoint['state_dict']
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+            checkpoint['state_dict'] = state_dict
         elif model_load=='resnet50_trained_on_SIN_and_IN_then_finetuned_on_IN':
             checkpoint = model_zoo.load_url(model_urls[model_load])
+            state_dict = checkpoint['state_dict']
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+            checkpoint['state_dict'] = state_dict
+        elif model_load=='vicregl_resnet50_alpha0p9':
+            model = torch.hub.load('facebookresearch/vicregl:main', 'resnet50_alpha0p9')
+        elif model_load=='vicregl_resnet50_alpha0p75':
+            model = torch.hub.load('facebookresearch/vicregl:main', 'resnet50_alpha0p75')
         else:
             assert(False) # dont know this model
 
@@ -226,12 +243,13 @@ class RESNET(nn.Module):
                 model,
                 DINOHead(embed_dim, out_dim, use_bn_in_head),
             )
+        elif 'vicregl' in model_load:
+            pass
         else:
             model = models.resnet50(pretrained=pretrained)
 
-        
-        if not pretrained:
-            model.load_state_dict(checkpoint["state_dict"])
+            if not pretrained:
+                model.load_state_dict(checkpoint["state_dict"])
 
         for p in model.parameters():
             p.requires_grad = False
@@ -429,9 +447,12 @@ class COCO_EXTRACT(nn.Module):
             idx = 0
             file_order = np.zeros(73000)
             feats = {}
-            model_info_table = pandas.read_excel(model_info_file)
-            if 'Unnamed: 0' in model_info_table.keys():
-                model_info_table = model_info_table.drop('Unnamed: 0', 1)
+            if write_to_excel:
+                model_info_table = pandas.read_excel(model_info_file)
+                if 'Unnamed: 0' in model_info_table.keys():
+                    model_info_table = model_info_table.drop('Unnamed: 0', 1)
+            df_appends = []
+            model_names_info_table_added = []
             for images, _, file_ids in tqdm(self.dataloader, leave=False):
 
                 # if only_process_stim_ids:
@@ -531,6 +552,10 @@ class COCO_EXTRACT(nn.Module):
                             feat_memX = self.pool3d(feat_memX)
                         elif num_spatial==2:
                             feat_memX = self.pool2d(feat_memX)
+                        elif num_spatial==1:
+                            break
+                        elif num_spatial==0:
+                            break
                         else:
                             assert(False)
                         feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
@@ -546,6 +571,14 @@ class COCO_EXTRACT(nn.Module):
                         elif num_spatial==2:
                             b,c,h,w = feat_memX.shape
                             feats[layer_] = np.zeros((73000, c, h, w), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        elif num_spatial==1:
+                            b,c,h = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c, h), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        elif num_spatial==0:
+                            b,c = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c), dtype=np.float32)
                             # file_order = np.zeros(73000)
                         else:
                             assert(False)
@@ -580,6 +613,10 @@ class COCO_EXTRACT(nn.Module):
                         pca_test_file_path =  f"{output_dir}/{layer_}_subj{subj}_test_pca.npy"
                         pca_fit_path = f"{output_dir}/{layer_}_subj{subj}_pca_fit.p" # path to pca model
 
+                        if os.path.isfile(pca_train_file_path) and os.path.isfile(pca_test_file_path):
+                            print(f"{pca_train_file_path} exists. delete old file to regenerate.")
+                            continue
+
                         stimulus_list = np.load(
                             "%s/coco_ID_of_repeats_subj%02d.npy" % (stim_dir, subj)
                         )
@@ -598,13 +635,15 @@ class COCO_EXTRACT(nn.Module):
 
                         if write_to_excel:
                             entry_name = f'{model_load}_{layer_}'
-                            if entry_name in model_info_table['model_name'].tolist():
+                            if (entry_name in model_info_table['model_name'].tolist()) or (entry_name in model_names_info_table_added):
                                 print("entry already exists.. skipping")
                             else:
                                 # last_index = model_info_table[model_info_table.keys()[0]].keys()[-1]
                                 data_to_append = [[entry_name, general_model_name, f'{output_dir}/{layer_}.npy', f'{output_dir}/file_order.npy', dataset, 'all_pca', '', '']]
                                 df_append = pandas.DataFrame(data_to_append, columns=list(model_info_table.keys()))
-                                model_info_table = model_info_table.append(df_append, ignore_index=True)
+                                df_appends.append(df_append)
+                                model_names_info_table_added.append(entry_name)
+                                # model_info_table = model_info_table.append(df_append, ignore_index=True)
 
             if save_full_features:
                 
@@ -614,13 +653,17 @@ class COCO_EXTRACT(nn.Module):
 
                     if write_to_excel:
                         entry_name = f'{model_load}_{layer_}'
-                        if entry_name in model_info_table['model_name'].tolist():
+                        if (entry_name in model_info_table['model_name'].tolist()) or (entry_name in model_names_info_table_added):
                             print("entry already exists.. skipping")
                         else:
                             # last_index = model_info_table[model_info_table.keys()[0]].keys()[-1]
                             data_to_append = [[entry_name, general_model_name, f'{output_dir}/{layer_}.npy', f'{output_dir}/file_order.npy', dataset, 'all_pca', '', '']]
-                            df_append = pandas.DataFrame(data_to_append, columns=list(model_info_table.keys()))
-                            model_info_table = model_info_table.append(df_append, ignore_index=True)
+                            df_append = pandas.DataFrame(data_to_append, columns=['model_name', 'model', 'feature_path', 'feature_order_path', 'dataset', 'subjects', 'size', 'description'])
+                            df_appends.append(df_append)
+                            model_names_info_table_added.append(entry_name)
+                            # with pandas.ExcelWriter(model_info_file, mode='a', engine="openpyxl", if_sheet_exists='overlay') as writer:
+                            #     df_append.to_excel(writer, sheet_name='Sheet1')
+                            # model_info_table = model_info_table.append(df_append, ignore_index=True)
 
             np.save(f'{output_dir}/file_order.npy', file_order)
 
@@ -629,9 +672,20 @@ class COCO_EXTRACT(nn.Module):
                 # model_info_table = model_info_table.drop('Unnamed: 0', 1)
                 # model_info_table.reset_index(drop=True, inplace=True)
                 # model_info_table = model_info_table.drop(np.arange(180, 182), 0)
-                writer = pandas.ExcelWriter(model_info_file)
-                model_info_table.to_excel(writer)
-                writer.save()
+                model_info_table = pandas.read_excel(model_info_file)
+                if 'Unnamed: 0' in model_info_table.keys():
+                    model_info_table = model_info_table.drop('Unnamed: 0', 1)
+                for df_append in df_appends:
+                    model_info_table = model_info_table.append(df_append, ignore_index=True)
+                with pandas.ExcelWriter(model_info_file, engine="openpyxl") as writer:
+                    model_info_table.to_excel(writer)
+                # writer = pandas.ExcelWriter(model_info_file)
+                # model_info_table.to_excel(writer)
+                # writer.save()
+                # writer.close()
+                # writer.handles = None
+                # with pandas.ExcelWriter(model_info_file, mode='a') as writer:
+                #     df.to_excel(writer, sheet_name='Sheet3')
                 print('DataFrame is written successfully to Excel File.')
 
 if __name__ == '__main__':

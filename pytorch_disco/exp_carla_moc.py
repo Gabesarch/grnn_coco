@@ -84,8 +84,6 @@ exps['trainer_carla_replica_feat3d_occ_emb3d_view'] = [
     'snap5k', 
 ]
 
-
-
 ######### view pred
 exps['trainer_carla_replica_feat3d_enc3d_occ_view'] = [
     'carla_moc', # mode
@@ -160,8 +158,6 @@ exps['trainer_carla_replica_feat3d_enc3d_view'] = [
     'snap5k', 
 ]
 
-
-
 ######## contrastive
 exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d'] = [
     'carla_moc', # mode
@@ -180,9 +176,6 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d'] = [
     #'log1',
     'snap5k', 
 ]
-
-
-
 
 ######## contrastive + view pred
 exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d_view'] = [
@@ -235,12 +228,12 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_view_vox'] = [
     'carla_and_replica_val',
     'bounds_train_replica_carla',
     # 'pretrained_feat3d',
-    '500k_iters',
+    '400k_iters',
     'lr4',
     'B1',
-    # 'pretrained_feat3d',
-    # 'pretrained_view',
-    # 'pretrained_occ',
+    'pretrained_feat3d',
+    'pretrained_view',
+    'pretrained_occ',
     'train_feat3d_enc3d',
     'train_occ',
     # 'train_emb3d',
@@ -250,7 +243,7 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_view_vox'] = [
     'log500',
     # 'vallog100',
     # 'log1',
-    'snap5k', 
+    'snap10k', 
 ]
 
 # emb + view
@@ -260,19 +253,44 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d_view_vox'] = [
     'carla_and_replica_val',
     'bounds_train_replica_carla',
     # 'pretrained_feat3d',
-    '500k_iters',
+    '400k_iters',
     'lr4',
     'B1',
     'train_feat3d_enc3d',
     'train_occ',
-    'train_emb3d',
+    'train_emb3d', # scale down to around view loss range
     'train_view',
     'fit_vox',
     # 'train_rgb',
     'log500',
     # 'vallog100',
     # 'log1',
-    'snap5k', 
+    'snap10k', 
+]
+
+# occ only
+exps['trainer_carla_replica_feat3d_enc3d_occ_vox'] = [
+    'carla_moc', # mode
+    'carla_and_replica_train',
+    'carla_and_replica_val',
+    'bounds_train_replica_carla',
+    # 'pretrained_feat3d',
+    '400k_iters',
+    'lr4',
+    'B1',
+    # 'pretrained_feat3d',
+    # 'pretrained_view',
+    # 'pretrained_occ',
+    'train_feat3d_enc3d',
+    'train_occ',
+    # 'train_emb3d',
+    # 'train_view',
+    'fit_vox',
+    # 'train_rgb',
+    'log500',
+    # 'vallog100',
+    # 'log1',
+    'snap10k', 
 ]
 
 ###############
@@ -303,11 +321,92 @@ exps['trainer_carla_replica_feat3d_enc3d_occ_view_vox_VAL'] = [
     'snap5k', 
 ]
 
+##################%%%%%%%  MARK Lescroart 2019 Data #############%%%%%%%%%%%
+# # emb only
+# exps['trainer_carla_replica_feat3d_enc3d_occ_emb3d_vox'] = [
+#     'carla_moc', # mode
+#     'carla_and_replica_train',
+#     'carla_and_replica_val',
+#     'bounds_train_replica_carla',
+#     # 'pretrained_feat3d',
+#     # 'pretrained_occ',
+#     '500k_iters',
+#     'lr4',
+#     'B1',
+#     'train_feat3d_enc3d',
+#     'train_occ',
+#     'train_emb3d',
+#     'fit_vox',
+#     # 'train_view',
+#     # 'train_rgb',
+#     'log500',
+#     # 'vallog100',
+#     #'log1',
+#     'snap5k', 
+# ]
+
+exps['trainer_lescroart_feat3d_enc3d_occ_emb3d_vox'] = [
+    'lescroart_moc', # mode
+    'mujoco_offline',  # mode
+    'mark_data',
+    'bounds_train_replica_carla',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    '500k_iters',
+    '2lr5',
+    'B3',
+    'train_feat3d_enc3d',
+    'train_occ',
+    'train_emb3d',
+    'fit_vox', # with fit vox, the bounds are determined
+    # 'train_view',
+    # 'train_rgb',
+    # 'log500',
+    # 'vallog100',
+    'log1',
+    'snap5k', 
+]
+
+exps['trainer_lescroart_feat3d_enc3d_occ_emb3d_vox'] = [
+    'lescroart_moc', # mode
+    'mujoco_offline',  # mode
+    # 'mark_data',
+    'carla_replica_mark_data',
+    'bounds_train_replica_carla',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    'resume_train',
+    '500k_iters',
+    '2lr5',
+    'B3',
+    'train_feat3d_enc3d',
+    'train_occ',
+    'train_emb3d',
+    'fit_vox', # with fit vox, the bounds are determined
+    # 'train_view',
+    # 'train_rgb',
+    'log100',
+    # 'log500',
+    # 'vallog100',
+    # 'vallog1',
+    # 'log1',
+    'snap5k', 
+]
+
 ############## net configs ##############
 
 groups['carla_moc'] = ['do_carla_moc = True']
 
 groups['do_midas'] = ['do_midas_depth_estimation = True']
+
+groups['lescroart_moc'] = [
+    'do_lescroart_moc = True',
+    'do_carla_moc = True'
+    ]
+groups['mujoco_offline'] = ['do_mujoco_offline = True']
+groups['mujoco_offline_metric'] = ['do_mujoco_offline_metric = True']
+groups['mujoco_offline_metric_2d'] = ['do_mujoco_offline_metric_2d = True']
+groups['touch_embed'] = ['do_touch_embed = True']
 
 groups['train_moc2D'] = [
     'do_moc2D = True',
@@ -329,6 +428,22 @@ groups['train_emb3d'] = [
     'emb3d_num_samples = 2',
     'emb3d_ce_coeff = 1.0',
 ]
+# groups['train_emb3d_reduced_coeff'] = [
+#     'do_emb3d = True',
+#     # 'emb3d_ml_coeff = 1.0',
+#     # 'emb3d_l2_coeff = 0.1',
+#     # 'emb3d_mindist = 16.0',
+#     # 'emb3d_num_samples = 2',
+#     'emb3d_mindist = 16.0',
+#     'emb3d_num_samples = 2',
+#     'emb3d_ce_coeff = 0.1',
+# ]
+
+groups['resume_train'] = [
+    'total_init = "03_m144x144x144_2e-5_O_c1_s.1_ns_carl_rep_lesc02"',
+]
+
+
 groups['train_feat2D'] = [
     'do_feat2D = True',
     'feat2D_dim = 32',
@@ -382,6 +497,8 @@ groups['vallog100'] = [
 groups['fit_vox'] = [
     'fit_vox = True',
 ]
+
+
 
 #K = 2 # how many objects to consider
 #N = 8 # how many objects per npz
@@ -453,6 +570,109 @@ groups['carla_and_replica_val'] = [
     'dataset_list_dir = "/user_data/gsarch/carla_replica_data/files"',
     'dataset_location = "/user_data/gsarch/carla_replica_data/files"',
     'dataset_filetype = "npz"',
+]
+
+
+groups['carla_replica_mark_data'] = [ #'dataset_name = "markdata"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 'dataset_name1 = "markdata"',
+                                 'trainset1 = "mark_data_train"',
+                                 'trainset_format1 = "multiview"', 
+                                 'trainset_seqlen1 = %d' % S, 
+                                 'valset1 = "mark_data_val"',
+                                 'dataset_list_dir1 = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_location1 = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_filetype1 = "txt"',
+                                 'dataset_name2 = "replica"',
+                                 'trainset2 = "train"',
+                                 'trainset_format2 = "multiview"', 
+                                 'trainset_seqlen2 = %d' % S, 
+                                #  'valset2 = "mark_data_train"',
+                                 'dataset_list_dir2 = "/user_data/gsarch/carla_replica_data/files/replica_all_obj_processed/npy"',
+                                 'dataset_location2 = "/user_data/gsarch/carla_replica_data/files/replica_all_obj_processed/npy"',
+                                 'dataset_filetype2 = "npz"',
+                                 'dataset_name3 = "replica"',
+                                 'trainset3 = "viewseg_multiview_mr07_s29_i1_train"',
+                                 'trainset_format3 = "multiview"', 
+                                 'trainset_seqlen3 = %d' % S, 
+                                #  'valset3 = "mark_data_train"',
+                                 'dataset_list_dir3 = "/user_data/gsarch/carla_replica_data/datasets/carla/processed/npzs"',
+                                 'dataset_location3 = "/user_data/gsarch/carla_replica_data/datasets/carla/processed/npzs"',
+                                 'dataset_filetype3 = "npz"',
+
+]
+
+groups['mark_data_small'] = ['dataset_name = "markdata"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 'trainset = "mark_data_small_train"',
+                                 'valset = "mark_data_small_train"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_data'] = ['dataset_name = "markdata"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 'trainset = "mark_data_train"',
+                                 'valset = "mark_data_train"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_location = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_val'] = ['dataset_name = "markdata_val"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'valset = "mark_testdata_test"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn1'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn1"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+
+groups['mark_testdata_trn2'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn2"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn3'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn3"',
+                                 #'dataset_list_dir = "/projects/katefgroup/datasets/markdata"',
+                                 'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
+]
+
+groups['mark_testdata_trn4'] = ['dataset_name = "markdata_test"',
+                                 'H = %d' % H,
+                                 'W = %d' % W,
+                                 #'trainset = "mark_testdata_test"',
+                                 'testset = "mark_testdata_trn4"',
+                                 'dataset_list_dir = "/lab_data/tarrlab/common/datasets/markdata"',
+                                 #'dataset_list_dir = "/home/htung/Desktop/BlenderTemp"',
+                                 'dataset_filetype = "txt"'
 ]
 
 ############## verify and execute ##############

@@ -43,9 +43,13 @@ class Feat3dNet(nn.Module):
         
         print(self.net)
 
-    def forward(self, feat_input, mask_input=None, norm=True, summ_writer=None):
+    def forward(self, feat_input, mask_input=None, norm=True, summ_writer=None, set_name=None):
         total_loss = torch.tensor(0.0).cuda()
         B, C, Z, Y, X = list(feat_input.shape)
+
+        front_name = 'feat3d'
+        if set_name is not None:
+            front_name = f'{front_name}_{set_name}'
 
         # feat, bunch = self.net(feat_input, mask_input)
         feat = self.net(feat_input)
@@ -57,16 +61,16 @@ class Feat3dNet(nn.Module):
         smooth_vox = torch.mean(dx+dy+dz, dim=1, keepdims=True)
         smooth_loss = torch.mean(smooth_vox)
         if summ_writer is not None:
-            summ_writer.summ_oned('feat3D/smooth_loss', torch.mean(smooth_vox, dim=3))
-        total_loss = utils.misc.add_loss('feat3d/smooth_loss', total_loss, smooth_loss, hyp.feat3d_smooth_coeff, summ_writer)
+            summ_writer.summ_oned(f'{front_name}/smooth_loss', torch.mean(smooth_vox, dim=3))
+        total_loss = utils.misc.add_loss(f'{front_name}/smooth_loss', total_loss, smooth_loss, hyp.feat3d_smooth_coeff, summ_writer)
 
         if norm:
             feat = utils.basic.l2_normalize(feat, dim=1)
         
         if summ_writer is not None:
-            summ_writer.summ_oned('feat3d/smooth_loss', torch.mean(smooth_vox, dim=3))
-            summ_writer.summ_feat('feat3d/feat_input', feat_input, pca=(C>3))
-            summ_writer.summ_feat('feat3d/feat_output', feat, pca=True)
+            summ_writer.summ_oned(f'{front_name}/smooth_loss', torch.mean(smooth_vox, dim=3))
+            summ_writer.summ_feat(f'{front_name}/feat_input', feat_input, pca=(C>3))
+            summ_writer.summ_feat(f'{front_name}/feat_output', feat, pca=True)
     
         return total_loss, feat, bunch
 

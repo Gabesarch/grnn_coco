@@ -31,7 +31,7 @@ class OccNet(nn.Module):
 
         # self.conv3d = nn.ConvTranspose3d(hyp.feat_dim, 1, kernel_size=4, stride=2, padding=1, bias=False).cuda()
         
-    def compute_loss(self, pred, occ, free, valid, summ_writer):
+    def compute_loss(self, pred, occ, free, valid, summ_writer, set_name=None):
         pos = occ.clone()
         neg = free.clone()
 
@@ -45,7 +45,10 @@ class OccNet(nn.Module):
         mask_ = (pos+neg>0.0).float()
         loss_vis = torch.mean(loss*mask_*valid, dim=3)
         if summ_writer is not None:
-            summ_writer.summ_oned('occ/prob_loss', loss_vis)
+            front_name = 'occ'
+            if set_name is not None:
+                front_name = f'{front_name}_{set_name}'
+            summ_writer.summ_oned(f'{front_name}/prob_loss', loss_vis)
 
         pos_loss = utils.basic.reduce_masked_mean(loss, pos*valid)
         neg_loss = utils.basic.reduce_masked_mean(loss, neg*valid)
@@ -56,7 +59,7 @@ class OccNet(nn.Module):
 
         return loss_vox, balanced_loss, loss
 
-    def forward(self, feat, occ_g=None, free_g=None, valid=None, summ_writer=None, suffix=''):
+    def forward(self, feat, occ_g=None, free_g=None, valid=None, summ_writer=None, suffix='', set_name=None):
         total_loss = torch.tensor(0.0).cuda()
         
         occ_e_ = self.conv3d(feat)
@@ -96,24 +99,30 @@ class OccNet(nn.Module):
             acc_bal = (acc_occ + acc_free)*0.5
 
             if summ_writer is not None:
-                summ_writer.summ_scalar('unscaled_occ/acc_occ%s' % suffix, acc_occ.cpu().item())
-                summ_writer.summ_scalar('unscaled_occ/acc_free%s' % suffix, acc_free.cpu().item())
-                summ_writer.summ_scalar('unscaled_occ/acc_total%s' % suffix, acc_total.cpu().item())
-                summ_writer.summ_scalar('unscaled_occ/acc_bal%s' % suffix, acc_bal.cpu().item())
+                front_name = 'unscaled_occ'
+                if set_name is not None:
+                    front_name = f'{front_name}_{set_name}'
+                summ_writer.summ_scalar(f'{front_name}/acc_occ%s' % suffix, acc_occ.cpu().item())
+                summ_writer.summ_scalar(f'{front_name}/acc_free%s' % suffix, acc_free.cpu().item())
+                summ_writer.summ_scalar(f'{front_name}/acc_total%s' % suffix, acc_total.cpu().item())
+                summ_writer.summ_scalar(f'{front_name}/acc_bal%s' % suffix, acc_bal.cpu().item())
 
-            vox_loss, prob_loss, full_loss = self.compute_loss(occ_e_, occ_g, free_g, valid, summ_writer)
+            vox_loss, prob_loss, full_loss = self.compute_loss(occ_e_, occ_g, free_g, valid, summ_writer, set_name)
             total_loss = utils.misc.add_loss('occ/prob_loss%s' % suffix, total_loss, prob_loss, hyp.occ_coeff, summ_writer)
         else:
             full_loss, either_match = None, None
 
         if summ_writer is not None:
-            summ_writer.summ_oned('occ/smooth_loss%s' % suffix, torch.mean(smooth_vox, dim=3))
+            front_name = 'occ'
+            if set_name is not None:
+                front_name = f'{front_name}_{set_name}'
+            summ_writer.summ_oned(f'{front_name}/smooth_loss%s' % suffix, torch.mean(smooth_vox, dim=3))
             if occ_g is not None:
-                summ_writer.summ_occ('occ/occ_g%s' % suffix, occ_g)
-                summ_writer.summ_oned('occ/occ_g_oned%s' % suffix, occ_g, bev=True)
-                summ_writer.summ_occ('occ/free_g%s' % suffix, free_g)
-            summ_writer.summ_occ('occ/occ_e%s' % suffix, occ_e)
-            summ_writer.summ_oned('occ/occ_e_oned%s' % suffix, occ_e, bev=True)
+                summ_writer.summ_occ(f'{front_name}/occ_g%s' % suffix, occ_g)
+                summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g, bev=True)
+                summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g)
+            summ_writer.summ_occ(f'{front_name}/occ_e%s' % suffix, occ_e)
+            summ_writer.summ_oned(f'{front_name}/occ_e_oned%s' % suffix, occ_e, bev=True)
             # summ_writer.summ_occ('occ/valid%s' % suffix, valid)
 
         return total_loss, occ_e_

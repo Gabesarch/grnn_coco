@@ -28,7 +28,7 @@ from model_base import Model
 # # from nets.viewnet import ViewNet
 # from nets.rgbnet import RgbNet
 # from nets.featnet import FeatNet
-
+from tqdm import tqdm
 
 import cv2
 
@@ -48,6 +48,7 @@ import utils_vox_other as utils_vox
 from torchvision import transforms
 from torchvision import datasets
 import torchvision
+# from torch.utils.data import DataLoader, Dataset
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -68,9 +69,11 @@ np.random.seed(0)
 import ipdb
 st = ipdb.set_trace
 
-import dino.utils
+# import dino.utils
+
 
 sys.path.append("dino")
+import dino_utils as utils_dino
 import vision_transformer as vits
 import colorsys
 import random
@@ -89,6 +92,20 @@ coco_images_path = '/lab_data/tarrlab/common/datasets/NSD_images'
 # set_name = 'test02_inittest_0epoch'
 set_name = 'dino_replica_carla'
 set_name = 'dino_replica_carla_300epoch'
+
+set_name = 'dino_mult_rep_carl07'
+set_name = 'dino_mult_rep_carl_sameview07'
+
+set_name = 'dino_vitsmall_omnidata'
+set_name = 'dino_vitsmall_multiview_omnidata'
+
+# checkpoint_path = "/home/gsarch/repo/grnn_coco/pytorch_disco/checkpoints/64_m144x144x144_1e-4_ns_dino_mult_rep_carl07/model-40000.pth"
+# checkpoint_path = "/home/gsarch/repo/grnn_coco/pytorch_disco/checkpoints/64_m144x144x144_1e-4_ns_dino_mult_rep_carl_sameview07/model-40000.pth"
+# checkpoint_path = "/lab_data/tarrlab/gsarch/omnidata/dino_checkpoints/vit/dino_vitsmall_100epochs/checkpoint.pth"
+checkpoint_path = "/lab_data/tarrlab/gsarch/omnidata/dino_checkpoints/vit/dino_vitsmall_multiview_100epochs/checkpoint.pth"
+
+
+use_dino_load = True
 
 pretrain = True
 
@@ -216,7 +233,9 @@ class DINO(nn.Module):
             # self.model.load_state_dict(state_dict, strict=True)
             
         # path = '/user_data/gsarch/dino_output/checkpoint0100.pth'
-        path = '/user_data/gsarch/dino_output_300epoch/checkpoint0300.pth'
+        # path = '/user_data/gsarch/dino_output_300epoch/checkpoint0300.pth'
+        path = checkpoint_path
+
         print("PATH IS:", path)
         arch = "vit_small"
         patch_size = 16
@@ -246,7 +265,38 @@ class DINO(nn.Module):
         #     DINOHead(embed_dim, 65536, False),
         # )
 
-        dino.utils.load_pretrained_weights(model, path, "teacher", arch, patch_size)
+        if use_dino_load:
+            utils_dino.load_pretrained_weights(model, path, "teacher", arch, patch_size)
+            # to_restore = {"epoch": 0}
+            # utils_dino.restart_from_checkpoint(
+            #     path,
+            #     run_variables=to_restore,
+            #     # student=student,
+            #     teacher=model,
+            #     # optimizer=optimizer,
+            #     # fp16_scaler=fp16_scaler,
+            #     # dino_loss=dino_loss,
+            # )
+        else:
+            state_dict = torch.load(path)
+            state_dict = state_dict["model_state_dict"]
+            state_dict_ = {}
+            for k, v in state_dict.items():
+                if "teacher." in k:
+                    state_dict_[k] = state_dict[k]
+            state_dict = state_dict_
+            state_dict = {k.replace("teacher.", ""): v for k, v in state_dict.items()}
+            state_dict = {k.replace("backbone.", ""): v for k, v in state_dict.items()}
+
+            state_dict_ = {}
+            for k, v in state_dict.items():
+                if "head." not in k:
+                    state_dict_[k] = state_dict[k]
+            state_dict = state_dict_
+
+            msg = model.load_state_dict(state_dict, strict=True)
+            print("Loaded with message:", msg)
+
         for p in model.parameters():
             p.requires_grad = False
         model.eval()
@@ -331,7 +381,7 @@ class COCO_GRNN(nn.Module):
         self.dino = DINO() #torch.nn.Sequential(*(list(midas.pretrained.children())+list(midas.scratch.children()))[:-1])
         self.dino.cuda()
         self.dino.eval()
-        print(self.dino)
+        # print(self.dino)
 
         # self.W = 256
         # self.H = 256
@@ -390,13 +440,14 @@ class COCO_GRNN(nn.Module):
         supcat_names = []
         cat_ids = []
         idx = 0
-        for images, _, file_ids in self.dataloader:
+        # for images, file_ids in tqdm(enumerate(self.dataloader)):
+        for images, _, file_ids in tqdm(self.dataloader):
 
             if only_process_stim_ids:
                 if file_ids not in stim_list: 
                     continue
 
-            print('Images processed: ', idx)
+            # print('Images processed: ', idx)
 
             self.summ_writer = utils_improc.Summ_writer(
                 writer=self.writer,
@@ -475,7 +526,7 @@ class COCO_GRNN(nn.Module):
                 attention[idx] = attention_.detach().cpu().numpy() 
                 file_order[idx] = file_ids.detach().cpu().numpy() 
 
-            if self.summ_writer.save_this:
+            if False: #self.summ_writer.save_this:
                 # nh = attention_.shape[1]
                 attentions = attention_.reshape(nh, -1)
                 threshold = 0.6

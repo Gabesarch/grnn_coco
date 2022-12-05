@@ -176,11 +176,14 @@ groups['profile'] = ['do_profile = True',
 
 groups['B1'] = ['B = 1']
 groups['B2'] = ['B = 2']
+groups['B3'] = ['B = 3']
 groups['B4'] = ['B = 4']
 groups['B8'] = ['B = 8']
 groups['B10'] = ['B = 10']
 groups['B16'] = ['B = 16']
+groups['B24'] = ['B = 24']
 groups['B32'] = ['B = 32']
+groups['B36'] = ['B = 36']
 groups['B64'] = ['B = 64']
 groups['B128'] = ['B = 128']
 groups['lr0'] = ['lr = 0.0']
@@ -189,6 +192,7 @@ groups['lr3'] = ['lr = 1e-3']
 groups['2lr4'] = ['lr = 2e-4']
 groups['5lr4'] = ['lr = 5e-4']
 groups['lr4'] = ['lr = 1e-4']
+groups['2lr5'] = ['lr = 2e-5']
 groups['lr5'] = ['lr = 1e-5']
 groups['lr6'] = ['lr = 1e-6']
 groups['lr7'] = ['lr = 1e-7']
@@ -231,6 +235,7 @@ groups['10k_iters'] = ['max_iters = 10000']
 groups['20k_iters'] = ['max_iters = 20000']
 groups['30k_iters'] = ['max_iters = 30000']
 groups['40k_iters'] = ['max_iters = 40000']
+groups['45k_iters'] = ['max_iters = 45000']
 groups['50k_iters'] = ['max_iters = 50000']
 groups['60k_iters'] = ['max_iters = 60000']
 groups['80k_iters'] = ['max_iters = 80000']
@@ -317,6 +322,11 @@ groups['log100'] = [
     'log_freq_val = 100',
     'log_freq_test = 100',
 ]
+groups['log250'] = [
+    'log_freq_train = 250',
+    'log_freq_val = 250',
+    'log_freq_test = 250',
+]
 groups['log500'] = [
     'log_freq_train = 500',
     'log_freq_val = 500',
@@ -351,6 +361,7 @@ groups['snap100'] = ['snap_freq = 100']
 groups['snap500'] = ['snap_freq = 500']
 groups['snap1k'] = ['snap_freq = 1000']
 groups['snap5k'] = ['snap_freq = 5000']
+groups['snap10k'] = ['snap_freq = 10000']
 # ############## pretrained nets ##############
 groups['pretrained_feat'] = ['do_feat = True',
                              'feat_init = "' + pret_clevr.feat_init + '"',

@@ -5,11 +5,11 @@ import time
 # from utils_basic import *
 import torch.nn.functional as F
 # import archs.pixelshuffle3ds
-import spconv
-from spconv.pytorch.modules import SparseModule, SparseSequential
-from spconv.pytorch.conv import (SparseConv2d, SparseConv3d, SparseConvTranspose2d,
-                         SparseConvTranspose3d, SparseInverseConv2d,
-                         SparseInverseConv3d, SubMConv2d, SubMConv3d)
+# import spconv
+# from spconv.pytorch.modules import SparseModule, SparseSequential
+# from spconv.pytorch.conv import (SparseConv2d, SparseConv3d, SparseConvTranspose2d,
+#                          SparseConvTranspose3d, SparseInverseConv2d,
+#                          SparseInverseConv3d, SubMConv2d, SubMConv3d)
 
 def generate_sparse(feat, mask):
     B, C, D, H, W = list(feat.shape)

@@ -25,32 +25,53 @@ def main():
     mode = args.mode
     exp_name = args.exp_name
     run_name = args.run_name
-    if mode:
-        if "cs" == mode:
-            mode = "CLEVR_STA"
-        elif "nel" == mode:
-            mode = "NEL_STA"
-        elif "moc" == mode:
-            mode = "CARLA_MOC"
-        elif "gqn" == mode:
-            mode = "CARLA_GQN"
-    
     if run_name == "1":
         run_name = exp_name
 
-    os.environ["MODE"] = mode
+    
     os.environ["exp_name"] = exp_name
     os.environ["run_name"] = run_name
+    if mode:
+        if "cs" == mode:
+            mode = "CLEVR_STA"
+            os.environ["MODE"] = mode
+        elif "nel" == mode:
+            mode = "NEL_STA"
+            os.environ["MODE"] = mode
+        elif "moc" == mode:
+            mode = "CARLA_MOC"
+            os.environ["MODE"] = mode
+            from model_carla_moc import CARLA_MOC
+        elif "dino_multiview" == mode:
+            mode = "DINO_MULTIVIEW"
+            os.environ["MODE"] = mode
+            from model_dino_multiview import DINO_MULTIVIEW
+        elif "gqn" == mode:
+            mode = "CARLA_GQN"
+            os.environ["MODE"] = mode
+            from model_carla_gqn import CARLA_GQN
+        elif "lescroart_moc" == mode:
+            mode = "LESCROART_MOC"
+            os.environ["MODE"] = mode
+            from model_lescroart_moc import LESCROART_MOC
+        elif "lescroart_gqn" == mode:
+            mode = "LESCROART_GQN"
+            os.environ["MODE"] = mode
+        elif "omnidata_moc" == mode:
+            mode = "OMNIDATA_MOC"
+            os.environ["MODE"] = mode
+            from model_omnidata_moc import OMNIDATA_MOC
+        
     
     import hyperparams as hyp
-    from model_nel_sta import NEL_STA    
-    from model_clevr_sta import CLEVR_STA
-    from model_carla_moc import CARLA_MOC
-    from model_carla_gqn import CARLA_GQN
+    # from model_nel_sta import NEL_STA    
+    # from model_clevr_sta import CLEVR_STA
+    
+    
+    
+    
 
     checkpoint_dir_ = os.path.join("checkpoints", hyp.name)
-
-
 
     if hyp.do_clevr_sta:
         log_dir_ = os.path.join("logs_clevr_sta", hyp.name)    
@@ -60,6 +81,14 @@ def main():
         log_dir_ = os.path.join("logs_carla_moc", hyp.name)
     elif hyp.do_carla_gqn:
         log_dir_ = os.path.join("logs_carla_moc", hyp.name)
+    elif hyp.do_dino_multiview:
+        log_dir_ = os.path.join("logs_carla_moc", hyp.name)
+    elif hyp.do_lescroart_moc:
+        log_dir_ = os.path.join("logs_carla_moc", hyp.name)
+    elif hyp.do_lescroart_gqn:
+        log_dir_ = os.path.join("logs_carla_moc", hyp.name)
+    elif hyp.do_omnidata_moc:
+        log_dir_ = os.path.join("logs_omnidata_moc", hyp.name)
     else:
         assert(False) # what mode is this?
 
@@ -83,6 +112,22 @@ def main():
         model.go()
     elif hyp.do_carla_gqn:
         model = CARLA_GQN(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    # elif hyp.do_lescroart_moc:
+    #     model = LESCROART_MOC(checkpoint_dir=checkpoint_dir_,
+    #             log_dir=log_dir_)
+    #     model.go()
+    elif hyp.do_lescroart_gqn:
+        model = CARLA_GQN(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    elif hyp.do_dino_multiview:
+        model = DINO_MULTIVIEW(checkpoint_dir=checkpoint_dir_,
+                log_dir=log_dir_)
+        model.go()
+    elif hyp.do_omnidata_moc:
+        model = OMNIDATA_MOC(checkpoint_dir=checkpoint_dir_,
                 log_dir=log_dir_)
         model.go()
     else:

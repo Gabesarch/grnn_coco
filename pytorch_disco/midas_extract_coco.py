@@ -29,6 +29,8 @@ from model_base import Model
 # from nets.rgbnet import RgbNet
 from nets.featnet import FeatNet
 
+from tqdm import tqdm
+
 
 import cv2
 
@@ -76,6 +78,19 @@ set_name = 'midas00' # take output of entire network
 set_name = 'midas_bottleneck' # take output of refinenet1 (path_1)
 set_name = 'midas_all_layers' # take output of refinenet1 (path_1)
 # set_name = 'midas_all_layers_init' # take output of refinenet1 (path_1)
+set_name = 'midas_coco_DPT_Large'
+
+layers = [
+    # "layer_2",
+    # "layer_4",
+    "layer_2_rn",
+    "layer_4_rn",
+    # "path_3",
+    # "path_1",
+    # "out",
+]
+
+print("LAYERS", layers)
 
 checkpoint_dir='checkpoints/' + set_name
 log_dir='logs_grnn_coco'
@@ -133,16 +148,121 @@ class ImageFolderWithPaths(datasets.ImageFolder):
         tuple_with_path = (original_tuple + (file_id,))
         return tuple_with_path
 
+# class MIDAS(nn.Module):
+#     def __init__(self):
+#         super(MIDAS, self).__init__()
+
+#         # model_type = "DPT_Large"     # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
+#         #model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
+#         #model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
+#         model_type = "MiDaS" # large model
+
+#         self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS", pretrained=pretrained).eval()
+
+
+#     def forward(self, x):
+#         """Forward pass.
+#         Args:
+#             x (tensor): input data (image)
+#         Returns:
+#             tensor: depth
+#         """
+
+#         layer_1 = self.midas.pretrained.layer1(x)
+#         layer_2 = self.midas.pretrained.layer2(layer_1)
+#         layer_3 = self.midas.pretrained.layer3(layer_2)
+#         layer_4 = self.midas.pretrained.layer4(layer_3)
+
+#         layer_1_rn = self.midas.scratch.layer1_rn(layer_1)
+#         layer_2_rn = self.midas.scratch.layer2_rn(layer_2)
+#         layer_3_rn = self.midas.scratch.layer3_rn(layer_3)
+#         layer_4_rn = self.midas.scratch.layer4_rn(layer_4)
+
+#         path_4 = self.midas.scratch.refinenet4(layer_4_rn)
+#         path_3 = self.midas.scratch.refinenet3(path_4, layer_3_rn)
+#         path_2 = self.midas.scratch.refinenet2(path_3, layer_2_rn)
+#         path_1 = self.midas.scratch.refinenet1(path_2, layer_1_rn)
+
+#         out1 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[0:1]))(path_1)
+#         out2 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[1:4]))(out1)
+#         out3 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[4:]))(out2)
+
+#         return out3, out2, out1, path_1, path_3, layer_4_rn, layer_2_rn, layer_4, layer_2
+
+
 class MIDAS(nn.Module):
     def __init__(self):
         super(MIDAS, self).__init__()
 
-        # model_type = "DPT_Large"     # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
+        # # model_type = "DPT_Large"     # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
+        # #model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
+        # #model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
+        # model_type = "MiDaS" # large model
+
+        # self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS", pretrained=pretrained).eval()
+
+        # midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        # self.transform = midas_transforms.default_transform
+
+        # model_type = "MiDaS" # large model
+        model_type = "DPT_Large"     # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
         #model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
         #model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
-        model_type = "MiDaS"  
 
-        self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS", pretrained=pretrained).eval()
+        self.midas = torch.hub.load("intel-isl/MiDaS", model_type, pretrained=True).eval()
+
+        # midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        # self.transform = midas_transforms.default_transform
+
+        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+
+        if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
+            self.transform = midas_transforms.dpt_transform
+        else:
+            self.transform = midas_transforms.small_transform
+
+    def forward_vit(self, pretrained, x):
+        b, c, h, w = x.shape
+
+        glob = self.midas.pretrained.model.forward_flex(x)
+
+        layer_1 = self.midas.pretrained.activations["1"]
+        layer_2 = self.midas.pretrained.activations["2"]
+        layer_3 = self.midas.pretrained.activations["3"]
+        layer_4 = self.midas.pretrained.activations["4"]
+
+        layer_1 = self.midas.pretrained.act_postprocess1[0:2](layer_1)
+        layer_2 = self.midas.pretrained.act_postprocess2[0:2](layer_2)
+        layer_3 = self.midas.pretrained.act_postprocess3[0:2](layer_3)
+        layer_4 = self.midas.pretrained.act_postprocess4[0:2](layer_4)
+
+        unflatten = nn.Sequential(
+            nn.Unflatten(
+                2,
+                torch.Size(
+                    [
+                        h // self.midas.pretrained.model.patch_size[1],
+                        w // self.midas.pretrained.model.patch_size[0],
+                    ]
+                ),
+            )
+        )
+
+        if layer_1.ndim == 3:
+            layer_1 = unflatten(layer_1)
+        if layer_2.ndim == 3:
+            layer_2 = unflatten(layer_2)
+        if layer_3.ndim == 3:
+            layer_3 = unflatten(layer_3)
+        if layer_4.ndim == 3:
+            layer_4 = unflatten(layer_4)
+
+        layer_1 = self.midas.pretrained.act_postprocess1[3 : len(self.midas.pretrained.act_postprocess1)](layer_1)
+        layer_2 = self.midas.pretrained.act_postprocess2[3 : len(self.midas.pretrained.act_postprocess2)](layer_2)
+        layer_3 = self.midas.pretrained.act_postprocess3[3 : len(self.midas.pretrained.act_postprocess3)](layer_3)
+        layer_4 = self.midas.pretrained.act_postprocess4[3 : len(self.midas.pretrained.act_postprocess4)](layer_4)
+
+        return layer_1, layer_2, layer_3, layer_4
 
 
     def forward(self, x):
@@ -153,10 +273,18 @@ class MIDAS(nn.Module):
             tensor: depth
         """
 
-        layer_1 = self.midas.pretrained.layer1(x)
-        layer_2 = self.midas.pretrained.layer2(layer_1)
-        layer_3 = self.midas.pretrained.layer3(layer_2)
-        layer_4 = self.midas.pretrained.layer4(layer_3)
+        x = x * 255
+
+        x = x.squeeze(0).permute(1,2,0).cpu().numpy().astype(np.int32)
+
+        # print(x.min(), x.max())
+
+        x = self.transform(x).cuda()
+
+        if self.midas.channels_last == True:
+            x.contiguous(memory_format=torch.channels_last)
+
+        layer_1, layer_2, layer_3, layer_4 = self.forward_vit(self.midas.pretrained, x)
 
         layer_1_rn = self.midas.scratch.layer1_rn(layer_1)
         layer_2_rn = self.midas.scratch.layer2_rn(layer_2)
@@ -168,11 +296,44 @@ class MIDAS(nn.Module):
         path_2 = self.midas.scratch.refinenet2(path_3, layer_2_rn)
         path_1 = self.midas.scratch.refinenet1(path_2, layer_1_rn)
 
-        out1 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[0:1]))(path_1)
-        out2 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[1:4]))(out1)
-        out3 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[4:]))(out2)
+        out = self.midas.scratch.output_conv(path_1)
 
-        return out3, out2, out1, path_1, path_3, layer_4_rn, layer_2_rn, layer_4, layer_2
+        # plt.figure()
+        # plt.imshow(out.squeeze().cpu().numpy())
+        # plt.savefig('images/test.png')
+        # st()
+
+        # layer_1 = self.midas.pretrained.layer1(x)
+        # layer_2 = self.midas.pretrained.layer2(layer_1)
+        # layer_3 = self.midas.pretrained.layer3(layer_2)
+        # layer_4 = self.midas.pretrained.layer4(layer_3)
+
+        # layer_1_rn = self.midas.scratch.layer1_rn(layer_1)
+        # layer_2_rn = self.midas.scratch.layer2_rn(layer_2)
+        # layer_3_rn = self.midas.scratch.layer3_rn(layer_3)
+        # layer_4_rn = self.midas.scratch.layer4_rn(layer_4)
+
+        # path_4 = self.midas.scratch.refinenet4(layer_4_rn)
+        # path_3 = self.midas.scratch.refinenet3(path_4, layer_3_rn)
+        # path_2 = self.midas.scratch.refinenet2(path_3, layer_2_rn)
+        # path_1 = self.midas.scratch.refinenet1(path_2, layer_1_rn)
+
+        # out1 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[0:1]))(path_1)
+        # out2 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[1:4]))(out1)
+        # out3 = torch.nn.Sequential(*(list(self.midas.scratch.output_conv)[4:]))(out2)
+
+        out_dict = {}
+        out_dict["layer_2"] = layer_2
+        out_dict["layer_4"] = layer_4
+        out_dict["layer_2_rn"] = layer_2_rn
+        out_dict["layer_4_rn"] = layer_4_rn
+        out_dict["path_3"] = path_3
+        out_dict["path_1"] = path_1
+        out_dict["out"] = out
+        # out_dict["out2"] = out2
+        # out_dict["out3"] = out3
+
+        return out_dict
 
 class CARLA_MOC(Model):
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -261,7 +422,8 @@ class COCO_GRNN(nn.Module):
         self.pix_T_camX[1,2] = self.H/2. 
         
 
-        self.B = 10
+        self.B = 1
+        assert(self.B==1) 
         self.pix_T_camX = torch.from_numpy(self.pix_T_camX).cuda().unsqueeze(0).repeat(self.B,1,1).float()
 
         data_loader_transform = transforms.Compose([
@@ -272,171 +434,253 @@ class COCO_GRNN(nn.Module):
         # dataset = datasets.ImageFolder(coco_images_path, transform=transform)
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.B, shuffle=False)
 
-        self.Z, self.Y, self.X = hyp.Z, hyp.Y, hyp.X
+        # self.Z, self.Y, self.X = hyp.Z, hyp.Y, hyp.X
 
         # self.Z = 128
         # self.Y = 128
         # self.X = 128
-        bounds = torch.tensor([-12.0, 12.0, -12.0, 12.0, -12.0, 12.0]).cuda()
-        self.scene_centroid = torch.tensor([0.0, 0.0, 10.0]).unsqueeze(0).repeat(self.B,1).cuda()
-        self.vox_util = utils_vox.Vox_util(self.Z, self.Y, self.X, set_name, scene_centroid=self.scene_centroid, assert_cube=True, bounds=bounds)
+        # bounds = torch.tensor([-12.0, 12.0, -12.0, 12.0, -12.0, 12.0]).cuda()
+        # self.scene_centroid = torch.tensor([0.0, 0.0, 10.0]).unsqueeze(0).repeat(self.B,1).cuda()
+        # self.vox_util = utils_vox.Vox_util(self.Z, self.Y, self.X, set_name, scene_centroid=self.scene_centroid, assert_cube=True, bounds=bounds)
 
         self.writer = SummaryWriter(log_dir + '/' + set_name, max_queue=10, flush_secs=1000)
 
         # self.avgpool3d = nn.AvgPool3d(2, stride=2)
-        self.pool_len = pool_len
-        self.pool2d = nn.AvgPool2d(self.pool_len, stride=self.pool_len)
+        self.toPIL = transforms.ToPILImage()
 
-        self.num_maxpool = num_maxpool
+        self.pool_len = 2
+        self.pool3d = nn.AvgPool3d(self.pool_len, stride=self.pool_len)
+        self.pool2d = nn.AvgPool2d(self.pool_len, stride=self.pool_len)
 
         # self.run_extract()
     
     def run_extract(self):
 
-        if do_dim_red:
-            ch = 15 # 15 pcs well captures 95% of variance
-        else:
-            ch = 256
+        # if do_dim_red:
+        #     ch = 15 # 15 pcs well captures 95% of variance
+        # else:
+        #     ch = 256
         
-        if only_process_stim_ids:
-            feats = np.zeros((10000, ch,192/2,192/2), dtype=np.float32)
-            file_order = np.zeros(10000)
-        else:
-            out3_feats = np.zeros((73000,1, 192, 192), dtype=np.float32)
-            out2_feats= np.zeros((73000,4, 96, 96), dtype=np.float32)
-            out1_feats= np.zeros((73000,4, 96, 96), dtype=np.float32)
-            path_1_feats= np.zeros((73000,15, 48, 48), dtype=np.float32)
-            path_3_feats= np.zeros((73000,20, 48, 48), dtype=np.float32)
-            layer_4_rn_feats= np.zeros((73000,35, 12, 12), dtype=np.float32)
-            layer_2_rn_feats= np.zeros((73000,120, 24, 24), dtype=np.float32)
-            layer_4_feats= np.zeros((73000,100, 12, 12), dtype=np.float32)
-            layer_2_feats= np.zeros((73000,200, 24, 24), dtype=np.float32)
-            file_order = np.zeros(73000)
+        # if only_process_stim_ids:
+        #     feats = np.zeros((10000, ch,192/2,192/2), dtype=np.float32)
+        #     file_order = np.zeros(10000)
+        # else:
+        #     out3_feats = np.zeros((73000,1, 192, 192), dtype=np.float32)
+        #     out2_feats= np.zeros((73000,4, 96, 96), dtype=np.float32)
+        #     out1_feats= np.zeros((73000,4, 96, 96), dtype=np.float32)
+        #     path_1_feats= np.zeros((73000,15, 48, 48), dtype=np.float32)
+        #     path_3_feats= np.zeros((73000,20, 48, 48), dtype=np.float32)
+        #     layer_4_rn_feats= np.zeros((73000,35, 12, 12), dtype=np.float32)
+        #     layer_2_rn_feats= np.zeros((73000,120, 24, 24), dtype=np.float32)
+        #     layer_4_feats= np.zeros((73000,100, 12, 12), dtype=np.float32)
+        #     layer_2_feats= np.zeros((73000,200, 24, 24), dtype=np.float32)
+        #     file_order = np.zeros(73000)
+
+        feats_all = {}
         cat_names = []
         supcat_names = []
         cat_ids = []
         idx = 0
-        for images, _, file_ids in self.dataloader:
+        for images, _, file_ids in tqdm(self.dataloader):
 
-            if only_process_stim_ids:
-                if file_ids not in stim_list: 
-                    continue
-
-            print('Images processed: ', idx)
-
-            self.summ_writer = utils_improc.Summ_writer(
-                writer=self.writer,
-                global_step=idx,
-                set_name=set_name,
-                log_freq=log_freq,
-                fps=8,
-                # just_gif=True,
-            )
-
-            rgb_camX = images.cuda().float()
-            # rgb_camX_norm = rgb_camX - 0.5
-            # self.summ_writer.summ_rgb('inputs/rgb', rgb_camX_norm)
-
-            if False:
-                plt.figure()
-                rgb_camXs_np = rgb_camXs[0].permute(1,2,0).detach().cpu().numpy()
-                plt.imshow(rgb_camXs_np)
-                plt.savefig('images/test.png')
+            # print('Images processed: ', idx)
 
 
-            if plot_classes:
-                # get category name
-                for b in range(self.B):
-                    img_id = [int(file_ids[b].detach().cpu().numpy())]
-                    coco_util = self.coco_util_train
-                    annotation_ids = coco_util.getAnnIds(img_id)
-                    if not annotation_ids:
-                        coco_util = self.coco_util_val
-                        annotation_ids = coco_util.getAnnIds(img_id)
-                    annotations = coco_util.loadAnns(annotation_ids)
-
-                    best_area = 0
-                    entity_id = None
-                    entity = None
-                    for i in range(len(annotations)):
-                        if annotations[i]['area'] > best_area:
-                            entity_id = annotations[i]["category_id"]
-                            entity = coco_util.loadCats(entity_id)[0]["name"]
-                            super_cat = coco_util.loadCats(entity_id)[0]["supercategory"]
-                            best_area = annotations[i]['area']
-                    cat_names.append(entity)
-                    cat_ids.append(entity_id)
-                    supcat_names.append(super_cat)
-            
             # estimate depth
-            rgb_camX = (rgb_camX.permute(0,2,3,1).detach().cpu().numpy() * 255).astype(np.uint8)
-            input_batch = []
-            for b in range(self.B):
-                input_batch.append(self.transform(rgb_camX[b]).cuda())
-            input_batch = torch.cat(input_batch, dim=0)
-            out3, out2, out1, path_1, path_3, layer_4_rn, layer_2_rn, layer_4, layer_2 = self.midas(input_batch)
-
-            layers_list = {'out3':out3,'out2':out2, 'out1':out1, 'path_1':path_1, 'path_3':path_3, 'layer_4_rn':layer_4_rn, 'layer_2_rn':layer_2_rn, 'layer_4':layer_4, 'layer_2':layer_2}
-            
-            # depth_cam = (torch.max(depth_cam) - depth_cam) / 100.0
-
-            # depth_cam = self.XTCmodel_depth(rgb_camXs)
-
-            # # get depths in 0-100 range approx.
-            # depth_cam = (depth_cam / 0.7) * 100
-            
-            # self.summ_writer.summ_depth('inputs/depth_map', feat_memX[0].squeeze().detach().cpu().numpy())
+            with torch.no_grad():
+                out_dict = self.midas(images)
 
             if save_feats:
-                # pooling
+                for layer in layers:
+                    # feats_all[layer][idx] = out_dict[layer].squeeze().detach().cpu().numpy() 
 
-                # out3 = self.pool2d(out3)
-                # out2 = self.pool2d(out2)
-                # out1 = self.pool2d(out1)
-                # path_1 = self.pool2d(path_1)
+                    # layer_ind = layer_map[layer]
+                    feat_memX = out_dict[layer]
 
-                do_pool = ['out3', 'out2', 'out1', 'path_1', 'layer_2', 'layer_2_rn']
-                do_pool2 = ['out2', 'path_1']
-                do_reduce_chans = {'out2':4, 'out1':4, 'path_1':15, 'path_3':20, 'layer_4_rn':35, 'layer_2_rn':120, 'layer_4':100, 'layer_2':200}
+                    num_spatial = len(feat_memX.shape[2:])
+                    feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
+                    
+                    
+                    # 3d pool
+                    feat_size_thresh = 200000
 
-                # layers_list = {'out2':out2, 'out1':out1, 'path_1':path_1, 'path_3':path_3, 'layer_4_rn':layer_4_rn, 'layer_2_rn':layer_2_rn, 'layer_4':layer_4, 'layer_2':layer_2}
+                    while feat_size_flat>feat_size_thresh:
+                        if num_spatial==3:
+                            feat_memX = self.pool3d(feat_memX)
+                        elif num_spatial==2:
+                            feat_memX = self.pool2d(feat_memX)
+                        else:
+                            assert(False)
+                        feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
 
-                for key in list(layers_list.keys()):
-                    if key in do_pool:
-                        layers_list[key] = self.pool2d(layers_list[key])
-                    if key in do_pool2: 
-                        layers_list[key] = self.pool2d(layers_list[key])
+                    feat_memX = feat_memX.squeeze(0).cpu().numpy().astype(np.float32)
+                    # print(feat_memX.shape)
 
-                    if key in list(do_reduce_chans.keys()):
-                        ch = do_reduce_chans[key]
-                        feat_memX = layers_list[key].squeeze()
-                        feat_memX = feat_memX.permute(0,2,3,1)
-                        b,h,w,c = feat_memX.shape
-                        feat_memX = feat_memX.reshape(b, h*w, c).cpu().numpy()
-                        feat_memX_red = np.zeros((b,ch,h,w), dtype=np.float32)
-                        for b_i in range(self.B):
-                            feat_memX_ = feat_memX[b_i]
-                            pca = PCA(n_components=ch)
-                            feat_memX_ = pca.fit_transform(feat_memX_)
-                            feat_memX_= feat_memX_.reshape(h,w,ch).transpose((2,0,1))
-                            feat_memX_red[b_i] = feat_memX_
-                            # print(key, feat_memX_.shape)
-                            # print(key, np.cumsum(pca.explained_variance_ratio_)[-1])
-                        # feat_memX = feat_memX_red
-                        layers_list[key] = feat_memX_red
-                        del feat_memX_red
-                    if torch.is_tensor(layers_list[key]):
-                        layers_list[key] = layers_list[key].cpu().numpy()
-                    # print(key, layers_list[key].reshape(self.B, -1).shape)
-                    # print(key, layers_list[key].shape)
-                        # feat_memX = torch.from_numpy(feat_memX).cuda()
+                    if idx==0:
+                        feature_size = 73000 # tag_sizes[tag]
+                        if num_spatial==3:
+                            c,h,w,d = feat_memX.shape
+                            feats_all[layer] = np.zeros((feature_size, c, h, w, d), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        elif num_spatial==2:
+                            c,h,w = feat_memX.shape
+                            feats_all[layer] = np.zeros((feature_size, c, h, w), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        else:
+                            assert(False)
 
-                        # plt.plot(np.cumsum(pca.explained_variance_ratio_))
-                        # plt.xlabel('number of components')
-                        # plt.ylabel('cumulative explained variance')
-                        # plt.yticks(np.arange(0.0,1.0,0.05))
-                        # plt.savefig('images/variance_explained.png')
-                        # st()                
+                    feats_all[layer][idx] = feat_memX
+
+            
+
+            # if save_feats:
+            #     print(idx)
+            #     for layer in layers:
+            #         feats_all[layer][idx] = out_dict[layer].squeeze().detach().cpu().numpy() 
+
+            idx += 1*self.B
+
+        if save_feats:
+            for layer in layers:
+                feats = feats_all[layer]
+                # if block_average:
+                #     print("Block averaging...")
+                #     cur_feat_len = feats.shape[0]
+                #     new_feat_len = cur_feat_len/block_average_len
+                #     assert(new_feat_len.is_integer())
+                #     new_feat_len = int(new_feat_len)
+                #     indices_blocks = np.arange(0, cur_feat_len+1, block_average_len)
+                #     new_dims = list(feats.shape[1:])
+                #     new_dims = [new_feat_len] + new_dims
+                #     feats_ = np.zeros(new_dims)
+                #     for ii in range(new_feat_len):
+                #         feats_[ii] = np.mean(feats[indices_blocks[ii]:indices_blocks[ii+1]], axis=0)
+                #     if zscore_after_block_averaging:
+                #         feats_ = scipy.stats.zscore(feats_, axis=0)
+                #     feats = feats_
+                #     print("new feature length is:", feats.shape)
+                np.save(f'{output_dir}/{layer}.npy', feats)
+
+
+            # if only_process_stim_ids:
+            #     if file_ids not in stim_list: 
+            #         continue
+
+            # print('Images processed: ', idx)
+
+            # self.summ_writer = utils_improc.Summ_writer(
+            #     writer=self.writer,
+            #     global_step=idx,
+            #     set_name=set_name,
+            #     log_freq=log_freq,
+            #     fps=8,
+            #     # just_gif=True,
+            # )
+
+            # rgb_camX = images.cuda().float()
+            # # rgb_camX_norm = rgb_camX - 0.5
+            # # self.summ_writer.summ_rgb('inputs/rgb', rgb_camX_norm)
+
+            # if False:
+            #     plt.figure()
+            #     rgb_camXs_np = rgb_camXs[0].permute(1,2,0).detach().cpu().numpy()
+            #     plt.imshow(rgb_camXs_np)
+            #     plt.savefig('images/test.png')
+
+
+            # if plot_classes:
+            #     # get category name
+            #     for b in range(self.B):
+            #         img_id = [int(file_ids[b].detach().cpu().numpy())]
+            #         coco_util = self.coco_util_train
+            #         annotation_ids = coco_util.getAnnIds(img_id)
+            #         if not annotation_ids:
+            #             coco_util = self.coco_util_val
+            #             annotation_ids = coco_util.getAnnIds(img_id)
+            #         annotations = coco_util.loadAnns(annotation_ids)
+
+            #         best_area = 0
+            #         entity_id = None
+            #         entity = None
+            #         for i in range(len(annotations)):
+            #             if annotations[i]['area'] > best_area:
+            #                 entity_id = annotations[i]["category_id"]
+            #                 entity = coco_util.loadCats(entity_id)[0]["name"]
+            #                 super_cat = coco_util.loadCats(entity_id)[0]["supercategory"]
+            #                 best_area = annotations[i]['area']
+            #         cat_names.append(entity)
+            #         cat_ids.append(entity_id)
+            #         supcat_names.append(super_cat)
+            
+            # # estimate depth
+            # rgb_camX = (rgb_camX.permute(0,2,3,1).detach().cpu().numpy() * 255).astype(np.uint8)
+            # input_batch = []
+            # for b in range(self.B):
+            #     input_batch.append(self.transform(rgb_camX[b]).cuda())
+            # input_batch = torch.cat(input_batch, dim=0)
+            # out3, out2, out1, path_1, path_3, layer_4_rn, layer_2_rn, layer_4, layer_2 = self.midas(input_batch)
+
+            # layers_list = {'out3':out3,'out2':out2, 'out1':out1, 'path_1':path_1, 'path_3':path_3, 'layer_4_rn':layer_4_rn, 'layer_2_rn':layer_2_rn, 'layer_4':layer_4, 'layer_2':layer_2}
+            
+            # # depth_cam = (torch.max(depth_cam) - depth_cam) / 100.0
+
+            # # depth_cam = self.XTCmodel_depth(rgb_camXs)
+
+            # # # get depths in 0-100 range approx.
+            # # depth_cam = (depth_cam / 0.7) * 100
+            
+            # # self.summ_writer.summ_depth('inputs/depth_map', feat_memX[0].squeeze().detach().cpu().numpy())
+
+            # if save_feats:
+            #     # pooling
+
+            #     # out3 = self.pool2d(out3)
+            #     # out2 = self.pool2d(out2)
+            #     # out1 = self.pool2d(out1)
+            #     # path_1 = self.pool2d(path_1)
+
+            #     do_pool = ['out3', 'out2', 'out1', 'path_1', 'layer_2', 'layer_2_rn']
+            #     do_pool2 = ['out2', 'path_1']
+            #     do_reduce_chans = {'out2':4, 'out1':4, 'path_1':15, 'path_3':20, 'layer_4_rn':35, 'layer_2_rn':120, 'layer_4':100, 'layer_2':200}
+
+            #     # layers_list = {'out2':out2, 'out1':out1, 'path_1':path_1, 'path_3':path_3, 'layer_4_rn':layer_4_rn, 'layer_2_rn':layer_2_rn, 'layer_4':layer_4, 'layer_2':layer_2}
+
+            #     for key in list(layers_list.keys()):
+            #         if key in do_pool:
+            #             layers_list[key] = self.pool2d(layers_list[key])
+            #         if key in do_pool2: 
+            #             layers_list[key] = self.pool2d(layers_list[key])
+
+            #         if key in list(do_reduce_chans.keys()):
+            #             ch = do_reduce_chans[key]
+            #             feat_memX = layers_list[key].squeeze()
+            #             feat_memX = feat_memX.permute(0,2,3,1)
+            #             b,h,w,c = feat_memX.shape
+            #             feat_memX = feat_memX.reshape(b, h*w, c).cpu().numpy()
+            #             feat_memX_red = np.zeros((b,ch,h,w), dtype=np.float32)
+            #             for b_i in range(self.B):
+            #                 feat_memX_ = feat_memX[b_i]
+            #                 pca = PCA(n_components=ch)
+            #                 feat_memX_ = pca.fit_transform(feat_memX_)
+            #                 feat_memX_= feat_memX_.reshape(h,w,ch).transpose((2,0,1))
+            #                 feat_memX_red[b_i] = feat_memX_
+            #                 # print(key, feat_memX_.shape)
+            #                 # print(key, np.cumsum(pca.explained_variance_ratio_)[-1])
+            #             # feat_memX = feat_memX_red
+            #             layers_list[key] = feat_memX_red
+            #             del feat_memX_red
+            #         if torch.is_tensor(layers_list[key]):
+            #             layers_list[key] = layers_list[key].cpu().numpy()
+            #         # print(key, layers_list[key].reshape(self.B, -1).shape)
+            #         # print(key, layers_list[key].shape)
+            #             # feat_memX = torch.from_numpy(feat_memX).cuda()
+
+            #             # plt.plot(np.cumsum(pca.explained_variance_ratio_))
+            #             # plt.xlabel('number of components')
+            #             # plt.ylabel('cumulative explained variance')
+            #             # plt.yticks(np.arange(0.0,1.0,0.05))
+            #             # plt.savefig('images/variance_explained.png')
+            #             # st()                
     
                 # 2d pool
                 # if self.num_maxpool>0:
@@ -447,73 +691,73 @@ class COCO_GRNN(nn.Module):
                 # file_order.append(file_ids.detach().cpu().numpy())
                 # st()
                 # feat_memX = feat_memX.reshape(self.B, -1)
-                out3_feats[idx:idx+self.B] = layers_list['out3'].astype(np.float32)
-                out2_feats[idx:idx+self.B]= layers_list['out2'].astype(np.float32)
-                out1_feats[idx:idx+self.B]= layers_list['out1'].astype(np.float32)
-                path_1_feats[idx:idx+self.B]= layers_list['path_1'].astype(np.float32)
-                path_3_feats[idx:idx+self.B]= layers_list['path_3'].astype(np.float32)
-                layer_4_rn_feats[idx:idx+self.B]= layers_list['layer_4_rn'].astype(np.float32)
-                layer_2_rn_feats[idx:idx+self.B]= layers_list['layer_2_rn'].astype(np.float32)
-                layer_4_feats[idx:idx+self.B]= layers_list['layer_4'].astype(np.float32)
-                layer_2_feats[idx:idx+self.B]= layers_list['layer_2'].astype(np.float32)
-                file_order[idx:idx+self.B] = file_ids.detach().cpu().numpy()                
+        #         out3_feats[idx:idx+self.B] = layers_list['out3'].astype(np.float32)
+        #         out2_feats[idx:idx+self.B]= layers_list['out2'].astype(np.float32)
+        #         out1_feats[idx:idx+self.B]= layers_list['out1'].astype(np.float32)
+        #         path_1_feats[idx:idx+self.B]= layers_list['path_1'].astype(np.float32)
+        #         path_3_feats[idx:idx+self.B]= layers_list['path_3'].astype(np.float32)
+        #         layer_4_rn_feats[idx:idx+self.B]= layers_list['layer_4_rn'].astype(np.float32)
+        #         layer_2_rn_feats[idx:idx+self.B]= layers_list['layer_2_rn'].astype(np.float32)
+        #         layer_4_feats[idx:idx+self.B]= layers_list['layer_4'].astype(np.float32)
+        #         layer_2_feats[idx:idx+self.B]= layers_list['layer_2'].astype(np.float32)
+        #         file_order[idx:idx+self.B] = file_ids.detach().cpu().numpy()                
 
-            idx += 1*self.B
+        #     idx += 1*self.B
 
-            # plt.close('all')
+        #     # plt.close('all')
 
-            # if idx == 10:
-            #     break
+        #     # if idx == 10:
+        #     #     break
 
-            if only_process_stim_ids:
-                if idx == 10000:
-                    break
+        #     if only_process_stim_ids:
+        #         if idx == 10000:
+        #             break
         
-        # feats = np.concatenate(feats, axis=0)
-        # file_order = np.concatenate(file_order, axis=0)
-        dim_red = False
-        if dim_red:
-            pca = PCA(n_components=1000)
+        # # feats = np.concatenate(feats, axis=0)
+        # # file_order = np.concatenate(file_order, axis=0)
+        # dim_red = False
+        # if dim_red:
+        #     pca = PCA(n_components=1000)
 
-            b,c,h,w,d = feats.shape
-            feats = np.reshape(feats, (b, -1))
-            feats = pca.fit_transform(feats)
+        #     b,c,h,w,d = feats.shape
+        #     feats = np.reshape(feats, (b, -1))
+        #     feats = pca.fit_transform(feats)
 
-            plt.plot(np.cumsum(pca.explained_variance_ratio_))
-            plt.xlabel('number of components')
-            plt.ylabel('cumulative explained variance')
-            plt.yticks(np.arange(0.0,1.0,0.05))
-            plt.savefig(output_dir + '/variance_explained.png')
+        #     plt.plot(np.cumsum(pca.explained_variance_ratio_))
+        #     plt.xlabel('number of components')
+        #     plt.ylabel('cumulative explained variance')
+        #     plt.yticks(np.arange(0.0,1.0,0.05))
+        #     plt.savefig(output_dir + '/variance_explained.png')
 
-        if save_feats:
-            np.save(f'{output_dir}/out3_feats.npy', out3_feats)
-            np.save(f'{output_dir}/out2_feats.npy', out2_feats)
-            np.save(f'{output_dir}/out1_feats.npy', out1_feats)
-            np.save(f'{output_dir}/path_1_feats.npy', path_1_feats)
-            np.save(f'{output_dir}/path_3_feats.npy', path_3_feats)
-            np.save(f'{output_dir}/layer_4_rn_feats.npy', layer_4_rn_feats)
-            np.save(f'{output_dir}/layer_2_rn_feats.npy', layer_2_rn_feats)
-            np.save(f'{output_dir}/layer_4_feats.npy', layer_4_feats)
-            np.save(f'{output_dir}/layer_2_feats.npy', layer_2_feats)
-            np.save(f'{output_dir}/file_order.npy', file_order)
-            if plot_classes:
-                np.save(f'{output_dir}/supcat.npy', np.array(supcat_names))
-                np.save(f'{output_dir}/cat.npy', np.array(cat_names))
+        # if save_feats:
+        #     np.save(f'{output_dir}/out3_feats.npy', out3_feats)
+        #     np.save(f'{output_dir}/out2_feats.npy', out2_feats)
+        #     np.save(f'{output_dir}/out1_feats.npy', out1_feats)
+        #     np.save(f'{output_dir}/path_1_feats.npy', path_1_feats)
+        #     np.save(f'{output_dir}/path_3_feats.npy', path_3_feats)
+        #     np.save(f'{output_dir}/layer_4_rn_feats.npy', layer_4_rn_feats)
+        #     np.save(f'{output_dir}/layer_2_rn_feats.npy', layer_2_rn_feats)
+        #     np.save(f'{output_dir}/layer_4_feats.npy', layer_4_feats)
+        #     np.save(f'{output_dir}/layer_2_feats.npy', layer_2_feats)
+        #     np.save(f'{output_dir}/file_order.npy', file_order)
+        #     if plot_classes:
+        #         np.save(f'{output_dir}/supcat.npy', np.array(supcat_names))
+        #         np.save(f'{output_dir}/cat.npy', np.array(cat_names))
 
-        if plot_classes:
-            feats = np.reshape(feats, (feats.shape[0], -1))
+        # if plot_classes:
+        #     feats = np.reshape(feats, (feats.shape[0], -1))
 
-            tsne = TSNE(n_components=2).fit_transform(feats)
-            # pred_catnames_feats = [self.maskrcnn_to_ithor[i] for i in self.feature_obj_ids]
+        #     tsne = TSNE(n_components=2).fit_transform(feats)
+        #     # pred_catnames_feats = [self.maskrcnn_to_ithor[i] for i in self.feature_obj_ids]
 
-            self.plot_by_classes(supcat_names, tsne, self.summ_writer)
+        #     self.plot_by_classes(supcat_names, tsne, self.summ_writer)
 
-            # tsne plot colored by predicted labels
-            tsne_pred_figure = self.get_colored_tsne_image(supcat_names, tsne)
-            self.summ_writer.summ_figure(f'tsne/tsne_grnn_reduced_supcat', tsne_pred_figure)
+        #     # tsne plot colored by predicted labels
+        #     tsne_pred_figure = self.get_colored_tsne_image(supcat_names, tsne)
+        #     self.summ_writer.summ_figure(f'tsne/tsne_grnn_reduced_supcat', tsne_pred_figure)
 
-            tsne_pred_figure = self.get_colored_tsne_image(cat_names, tsne)
-            self.summ_writer.summ_figure(f'tsne/tsne_grnn_reduced_cat', tsne_pred_figure)
+        #     tsne_pred_figure = self.get_colored_tsne_image(cat_names, tsne)
+        #     self.summ_writer.summ_figure(f'tsne/tsne_grnn_reduced_cat', tsne_pred_figure)
 
     def plot_tsne_only(self):
 

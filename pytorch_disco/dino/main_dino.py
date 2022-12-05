@@ -30,9 +30,12 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torchvision import models as torchvision_models
 
-import utils
+import dino_utils as utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
+
+import ipdb
+st = ipdb.set_trace
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -130,7 +133,14 @@ def get_args_parser():
 
 
 def train_dino(args):
-    utils.init_distributed_mode(args)
+    # utils.init_distributed_mode(args)
+    # os.environ['MASTER_ADDR'] = '127.0.0.1'
+    # os.environ['MASTER_PORT'] = '29500'
+    # dist.init_process_group(
+    #     backend="nccl",
+    #     init_method=args.dist_url,
+    #     world_size=torch.cuda.device_count(),
+    #     rank=0)
     utils.fix_random_seeds(args.seed)
     print("git:\n  {}\n".format(utils.get_sha()))
     print("\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
@@ -143,16 +153,27 @@ def train_dino(args):
         args.local_crops_number,
     )
     dataset = datasets.ImageFolder(args.data_path, transform=transform)
-    sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
+    # sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
+    # data_loader = torch.utils.data.DataLoader(
+    #     dataset,
+    #     sampler=sampler,
+    #     batch_size=args.batch_size_per_gpu,
+    #     num_workers=args.num_workers,
+    #     pin_memory=True,
+    #     drop_last=True,
+    # )
     data_loader = torch.utils.data.DataLoader(
         dataset,
-        sampler=sampler,
+        # sampler=sampler,
+        shuffle=True,
         batch_size=args.batch_size_per_gpu,
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
     )
     print(f"Data loaded: there are {len(dataset)} images.")
+
+    print("Total batch size is:", args.batch_size_per_gpu)
 
     # ============ building student and teacher networks ... ============
     # we changed the name DeiT-S for ViT-S to avoid confusions
@@ -192,18 +213,24 @@ def train_dino(args):
     )
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
+    # teacher = nn.parallel.DataParallel(teacher)
     # synchronize batch norms (if any)
     if utils.has_batchnorms(student):
-        student = nn.SyncBatchNorm.convert_sync_batchnorm(student)
-        teacher = nn.SyncBatchNorm.convert_sync_batchnorm(teacher)
+        # student = nn.SyncBatchNorm.convert_sync_batchnorm(student)
+        # teacher = nn.SyncBatchNorm.convert_sync_batchnorm(teacher)
 
         # we need DDP wrapper to have synchro batch norms working...
-        teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu])
+        # teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu])
+        teacher = nn.parallel.DataParallel(teacher)
         teacher_without_ddp = teacher.module
     else:
         # teacher_without_ddp and teacher are the same thing
-        teacher_without_ddp = teacher
-    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu])
+        # teacher = nn.parallel.DataParallel(teacher)
+        teacher_without_ddp = teacher#.module
+        # teacher_without_ddp = teacher
+    # student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu])
+    student = nn.parallel.DataParallel(student)
+    print("Let's use", torch.cuda.device_count(), "GPUs!")
     # teacher and student start with the same weights
     teacher_without_ddp.load_state_dict(student.module.state_dict())
     # there is no backpropagation through the teacher, so no need for gradients
@@ -267,7 +294,7 @@ def train_dino(args):
     start_time = time.time()
     print("Starting DINO training !")
     for epoch in range(start_epoch, args.epochs):
-        data_loader.sampler.set_epoch(epoch)
+        # data_loader.sampler.set_epoch(epoch)
 
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
@@ -318,7 +345,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
             loss = dino_loss(student_output, teacher_output, epoch)
-
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
             sys.exit(1)
@@ -383,12 +409,10 @@ class DINOLoss(nn.Module):
         """
         student_out = student_output / self.student_temp
         student_out = student_out.chunk(self.ncrops)
-
         # teacher centering and sharpening
         temp = self.teacher_temp_schedule[epoch]
         teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
         teacher_out = teacher_out.detach().chunk(2)
-
         total_loss = 0
         n_loss_terms = 0
         for iq, q in enumerate(teacher_out):
@@ -409,8 +433,10 @@ class DINOLoss(nn.Module):
         Update center used for teacher output.
         """
         batch_center = torch.sum(teacher_output, dim=0, keepdim=True)
-        dist.all_reduce(batch_center)
-        batch_center = batch_center / (len(teacher_output) * dist.get_world_size())
+        # dist.all_reduce(batch_center)
+        # with Data
+        batch_center = batch_center / (len(teacher_output) * 1) #dist.get_world_size())
+        # batch_center = batch_center / (len(teacher_output) * dist.get_world_size())
 
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)

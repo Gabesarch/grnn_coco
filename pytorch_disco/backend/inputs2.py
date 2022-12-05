@@ -10,6 +10,12 @@ from backend import readers
 import os, json, random, imageio
 import utils.improc
 np.set_printoptions(precision=2, suppress=True)
+from torchvision import datasets, transforms
+from PIL import Image
+import dino.dino_utils as utils_dino
+import time
+from os import listdir
+from os.path import isfile, join
 
 import ipdb
 st = ipdb.set_trace
@@ -54,8 +60,35 @@ class NpzDataset(torch.utils.data.Dataset):
         self.data_consec = data_consec
         self.seqlen = seqlen
 
+        if self.data_format=="dino_multiview":
+            self.data_aug = DataAugmentationDINO(
+                hyp.global_crops_scale,
+                hyp.local_crops_scale,
+                hyp.local_crops_number,
+            )
+
     def __getitem__(self, index):
-        if (self.data_format=='seq' or
+        # print(self.data_format)
+        if self.data_format=='dino_multiview':
+            time1 = time.time()
+            filename = self.records[index]
+            filename = filename.rsplit('.', 1)[0]
+            folder, file_start = filename.rsplit('/', 1)
+            onlyfiles = [f for f in listdir(folder) if (isfile(join(folder, f)) and file_start in f and '.jpeg' in f)]
+            inds = np.random.randint(0, len(onlyfiles), self.seqlen)
+            chosen = [onlyfiles[idx] for idx in list(inds)]
+            if hyp.predict_view1_only:
+                view1 = image = Image.open(os.path.join(folder, chosen[0])) #Image.fromarray(rgb_camXs[0])
+                view2 = view1
+            else:
+                assert(len(chosen)==2)
+                view1 = Image.open(os.path.join(folder, chosen[0]))
+                view2 = Image.open(os.path.join(folder, chosen[1]))
+            rgb = self.data_aug(view1, view2)
+            d = {}
+            d['rgb_camXs'] = rgb
+            return d
+        elif (self.data_format=='seq' or
             self.data_format=='multiview' or
             self.data_format=='nuscenes' or
             self.data_format=='ktrack' or
@@ -65,7 +98,10 @@ class NpzDataset(torch.utils.data.Dataset):
             self.data_format=='oldtraj' or
             self.data_format=='simpletraj'):
             filename = self.records[index]
+            # time1 = time.time()
             d = np.load(filename, allow_pickle=True)
+            # time2 = time.time()
+            # print(1, time2-time1)
             d = dict(d)
             # elif self.data_format=='nuscenes':
             #     filename = self.records[index]
@@ -76,7 +112,10 @@ class NpzDataset(torch.utils.data.Dataset):
 
         # if the sequence length > 2, select S frames
         if self.shuffle:
+            # time1 = time.time()
             d = self.random_select_single(d, num_samples=self.seqlen)
+            # time2 = time.time()
+            # print(2, time2-time1)
         else:
             d = self.non_random_select_single(d, num_samples=self.seqlen)
 
@@ -134,8 +173,36 @@ class NpzDataset(torch.utils.data.Dataset):
             rgb_camRs = np.transpose(rgb_camRs, axes=[0, 3, 1, 2])
             rgb_camRs = utils.py.preprocess_color(rgb_camRs)
             d['rgb_camRs'] = rgb_camRs
-            
+        elif self.data_format=='dino_multiview':
+            # print("HERE")
+            if 'rgb_camXs_raw' in d:
+                rgb_camXs = d['rgb_camXs_raw']
+            else:
+                rgb_camXs = d['rgb_camXs']
+            # move channel dim inward, like pytorch wants
+            # rgb_camXs = np.transpose(rgb_camXs, axes=[0, 3, 1, 2])
+            # time2 = time.time()
+            # print(2, time2-time1)
+            # time1 = time.time()
+            if hyp.predict_view1_only:
+                # print('here')
+                view1 = Image.fromarray(rgb_camXs[0])
+                view2 = view1
+            else:
+                assert(len(rgb_camXs)==2)
+                view1 = Image.fromarray(rgb_camXs[0])
+                view2 = Image.fromarray(rgb_camXs[1])
+            # print(max(view1))
+            # print(min(view1))
+            rgb = self.data_aug(view1, view2)
+            # time2 = time.time()
+            # print(3, time2-time1)
+            # rgb_camXs = utils.py.preprocess_color(rgb_camXs)
+            d['rgb_camXs'] = rgb
+            if 'masks_camXs' in d:
+                d['masks_camXs'] = list(d['masks_camXs'])
         else:
+            # print("here3")
             # print(d.keys())
             if 'rgb_camXs_raw' in d:
                 rgb_camXs = d['rgb_camXs_raw']
@@ -154,8 +221,10 @@ class NpzDataset(torch.utils.data.Dataset):
         #     rgb_camRs = np.transpose(rgb_camRs, axes=[0, 3, 1, 2])
         #     rgb_camRs = utils.py.preprocess_color(rgb_camRs)
         #     d['rgb_camRs'] = rgb_camRs
-
+        
         d['filename'] = filename
+        # time2 = time.time()
+        # print(2, time2-time1)
         return d
 
     def __len__(self):
@@ -174,6 +243,7 @@ class NpzDataset(torch.utils.data.Dataset):
                 'scorelists',
             ]
         elif self.data_format=='multiview':
+            # print('here')
             item_names = [
                 'pix_T_cams_raw',
                 'camR_T_origin_raw',
@@ -184,6 +254,22 @@ class NpzDataset(torch.utils.data.Dataset):
                 # 'lrtlist_camRs',
                 # 'rgb_camRs',
                 'xyz_camXs_raw',
+                # 'masks_camXs',
+                # 'boxlists',
+                # 'tidlist_s',
+                # 'scorelist_s',
+            ]
+        elif self.data_format=='dino_multiview':
+            item_names = [
+                # 'pix_T_cams_raw',
+                # 'camR_T_origin_raw',
+                # 'origin_T_camRs_raw',
+                # 'origin_T_camXs_raw',
+                'rgb_camXs_raw',
+                # 'seg_camXs',
+                # 'lrtlist_camRs',
+                # 'rgb_camRs',
+                # 'xyz_camXs_raw',
                 # 'masks_camXs',
                 # 'boxlists',
                 # 'tidlist_s',
@@ -571,6 +657,7 @@ def get_inputs():
             data_path = hyp.data_paths[set_name]
             shuffle = hyp.shuffles[set_name]
             data_format = hyp.data_formats[set_name]
+            # print("DATAFORMAT", data_format)
             data_consec = hyp.data_consecs[set_name]
             seqlen = hyp.seqlens[set_name]
             batch_size = hyp.batch_sizes[set_name]
@@ -579,7 +666,7 @@ def get_inputs():
                 # print('setting num_workers=1')
                 # print(set_name, data_format)
                 # num_workers = 4
-                # num_workers = 6
+                # num_workers = 8
                 num_workers = 1
                 print(shuffle, data_format, data_consec, seqlen, batch_size)
                 # num_workers = 2
@@ -603,3 +690,49 @@ def get_inputs():
 
     return all_set_inputs
 
+class DataAugmentationDINO(object):
+    def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
+        flip_and_color_jitter = transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8
+            ),
+            transforms.RandomGrayscale(p=0.2),
+        ])
+        normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
+
+        # first global crop
+        self.global_transfo1 = transforms.Compose([
+            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils_dino.GaussianBlur(1.0),
+            normalize,
+        ])
+        # second global crop
+        self.global_transfo2 = transforms.Compose([
+            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils_dino.GaussianBlur(0.1),
+            utils_dino.Solarization(0.2),
+            normalize,
+        ])
+        # transformation for the local small crops
+        self.local_crops_number = local_crops_number
+        self.local_transfo = transforms.Compose([
+            transforms.RandomResizedCrop(96, scale=local_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils_dino.GaussianBlur(p=0.5),
+            normalize,
+        ])
+
+    def __call__(self, view1, view2):
+        crops = []
+        crops.append(self.global_transfo1(view1))
+        crops.append(self.global_transfo2(view1))
+        for _ in range(self.local_crops_number):
+            crops.append(self.local_transfo(view2))
+        return crops
