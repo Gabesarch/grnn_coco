@@ -65,7 +65,6 @@ def reduce_masked_mean(x, mask, dim=None, keepdim=False):
     if dim is None:
         numer = torch.sum(prod)
         denom = EPS+torch.sum(mask)
-    
     else:
         numer = torch.sum(prod, dim=dim, keepdim=keepdim)
         denom = EPS+torch.sum(mask, dim=dim, keepdim=keepdim)

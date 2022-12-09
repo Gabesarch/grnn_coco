@@ -49,7 +49,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'omnidata_moc', # mode
     'carla_and_replica_train',
     'carla_and_replica_val',
-    'bounds_train_replica_carla',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
     # 'pretrained_feat3d',
     # 'pretrained_occ',
     '500k_iters',
@@ -61,9 +62,9 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'fit_vox',
     # 'train_view',
     # 'train_rgb',
-    'log500',
+    # 'log500',
     # 'vallog100',
-    #'log1',
+    'log1',
     'snap5k', 
 ]
 
@@ -72,7 +73,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_view_vox'] = [
     'omnidata_moc', # mode
     'carla_and_replica_train',
     'carla_and_replica_val',
-    'bounds_train_replica_carla',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
     # 'pretrained_feat3d',
     '400k_iters',
     'lr4',
@@ -97,7 +99,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d_view_vox'] = [
     'omnidata_moc', # mode
     'carla_and_replica_train',
     'carla_and_replica_val',
-    'bounds_train_replica_carla',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
     # 'pretrained_feat3d',
     '400k_iters',
     'lr4',
@@ -119,7 +122,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_vox'] = [
     'omnidata_moc', # mode
     'carla_and_replica_train',
     'carla_and_replica_val',
-    'bounds_train_replica_carla',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
     # 'pretrained_feat3d',
     '400k_iters',
     'lr4',
@@ -145,7 +149,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_view_vox_VAL'] = [
     'omnidata_moc', # mode
     # 'carla_and_replica_val',
     'carla_and_replica_train',
-    'bounds_train_replica_carla',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
     # 'pretrained_feat3d',
     '1000_iters',
     'lr4',
@@ -283,13 +288,25 @@ PW = int(W/2.0)
 
 SIZE = 36
 
-groups['bounds_train_replica_carla'] = [
-    'XMIN = -3.4', # right (neg is left)
-    'XMAX = 3.4', # right
-    'YMIN = -3.4', # down (neg is up)
-    'YMAX = 3.4', # down
-    'ZMIN = 0.0', # forward
-    'ZMAX = 6.8', # forward    
+# groups['bounds_train_replica_carla'] = [
+#     'XMIN = -3.4', # right (neg is left)
+#     'XMAX = 3.4', # right
+#     'YMIN = -3.4', # down (neg is up)
+#     'YMAX = 3.4', # down
+#     'ZMIN = 0.0', # forward
+#     'ZMAX = 6.8', # forward    
+#     'Z = %d' % (int(SIZE*4)),
+#     'Y = %d' % (int(SIZE*4)),
+#     'X = %d' % (int(SIZE*4)),
+# ]
+
+groups['8-8-8_bounds_train'] = [
+    'XMIN = -8.0', # right (neg is left)
+    'XMAX = 8.0', # right
+    'YMIN = -8.0', # down (neg is up)
+    'YMAX = 8.0', # down
+    'ZMIN = -8.0', # forward
+    'ZMAX = 8.0', # forward  
     'Z = %d' % (int(SIZE*4)),
     'Y = %d' % (int(SIZE*4)),
     'X = %d' % (int(SIZE*4)),

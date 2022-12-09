@@ -15,6 +15,8 @@ elif os.environ["MODE"] in ["CARLA_MOC", "CARLA_GQN"]:
     from backend import inputs2 as load_inputs
     # from backend import inputs3 as inputs
     # from backend import inputs3 as load_inputs
+elif os.environ["MODE"] in ["OMNIDATA_MOC"]:
+    pass
 else:
     from backend import saverloader, inputs
     from backend import inputs as load_inputs
@@ -48,7 +50,7 @@ class Model(object):
         print(hyp.name)
         self.checkpoint_dir = checkpoint_dir
         self.log_dir = log_dir
-        if os.environ["run_name"] != "grnn" and hyp.dataset_name1 is None:
+        if os.environ["run_name"] != "grnn" and hyp.dataset_name1 is None and (not os.environ["MODE"] in ["OMNIDATA_MOC"]):
             self.all_inputs = inputs.get_inputs()
         print("------ Done getting inputs ------")
 

@@ -44,12 +44,11 @@ class OccNet(nn.Module):
 
         mask_ = (pos+neg>0.0).float()
         loss_vis = torch.mean(loss*mask_*valid, dim=3)
-        if summ_writer is not None:
-            front_name = 'occ'
-            if set_name is not None:
-                front_name = f'{front_name}_{set_name}'
-            summ_writer.summ_oned(f'{front_name}/prob_loss', loss_vis)
-
+        # if summ_writer is not None:
+        #     front_name = 'occ'
+        #     if set_name is not None:
+        #         front_name = f'{front_name}_{set_name}'
+            # summ_writer.summ_oned(f'{front_name}/prob_loss', loss_vis)
         pos_loss = utils.basic.reduce_masked_mean(loss, pos*valid)
         neg_loss = utils.basic.reduce_masked_mean(loss, neg*valid)
 
@@ -63,25 +62,17 @@ class OccNet(nn.Module):
         total_loss = torch.tensor(0.0).cuda()
         
         occ_e_ = self.conv3d(feat)
-        # occ_e_ = feat[:,0:1]
-        # print('occnet just slicing')
-        
-        # occ_e_ = self.unpack(occ_e_)
-        # valid = F.interpolate(valid, scale_factor=2, mode='nearest')
-        # occ_e_ is B x 1 x Z x Y x X
-        # print('occ_e_', occ_e_.shape)
-        # print('valid', valid.shape)
-        # print('occ_g', occ_g.shape)
 
         # smooth loss
         dz, dy, dx = utils.basic.gradient3d(occ_e_, absolute=True)
         smooth_vox = torch.mean(dx+dy+dz, dim=1, keepdims=True)
-        if valid is not None:
-            smooth_loss = utils.basic.reduce_masked_mean(smooth_vox, valid)
-        else:
-            smooth_loss = torch.mean(smooth_vox)
+        # if valid is not None:
+        #     smooth_loss = utils.basic.reduce_masked_mean(smooth_vox, valid)
+        # else:
+        smooth_loss = torch.mean(smooth_vox)
         total_loss = utils.misc.add_loss('occ/smooth_loss%s' % suffix, total_loss, smooth_loss, hyp.occ_smooth_coeff, summ_writer)
-    
+        
+        occ_e_ = occ_e_.squeeze(1)
         occ_e = torch.sigmoid(occ_e_)
         occ_e_binary = torch.round(occ_e)
 
@@ -118,11 +109,11 @@ class OccNet(nn.Module):
                 front_name = f'{front_name}_{set_name}'
             summ_writer.summ_oned(f'{front_name}/smooth_loss%s' % suffix, torch.mean(smooth_vox, dim=3))
             if occ_g is not None:
-                summ_writer.summ_occ(f'{front_name}/occ_g%s' % suffix, occ_g)
-                summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g, bev=True)
-                summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g)
-            summ_writer.summ_occ(f'{front_name}/occ_e%s' % suffix, occ_e)
-            summ_writer.summ_oned(f'{front_name}/occ_e_oned%s' % suffix, occ_e, bev=True)
+                summ_writer.summ_occ(f'{front_name}/occ_g%s' % suffix, occ_g.unsqueeze(1))
+                summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g.unsqueeze(1), bev=True)
+                summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g.unsqueeze(1))
+            summ_writer.summ_occ(f'{front_name}/occ_e%s' % suffix, occ_e.unsqueeze(1))
+            summ_writer.summ_oned(f'{front_name}/occ_e_oned%s' % suffix, occ_e.unsqueeze(1), bev=True)
             # summ_writer.summ_occ('occ/valid%s' % suffix, valid)
 
         return total_loss, occ_e_

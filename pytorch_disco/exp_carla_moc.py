@@ -45,9 +45,9 @@ exps['trainer_carla_replica_feat3d_occ_emb3d'] = [
     'carla_moc', # mode
     # 'carla_surveil_multiview_train_data',
     # 'carla_multiview_train_data',
-    'carla_and_replica_train',
+    # 'carla_and_replica_train',
     # '16-8-16_bounds_train',
-    # '8-8-8_bounds_train',
+    '8-8-8_bounds_train',
     'bounds_train_replica_carla',
     # 'pretrained_feat3d',
     '500k_iters',

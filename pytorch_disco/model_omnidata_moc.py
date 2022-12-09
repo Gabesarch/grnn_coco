@@ -6,6 +6,7 @@ import numpy as np
 import imageio,scipy
 from sklearn.cluster import KMeans
 from backend import saverloader
+from utils.improc import MetricLogger
 
 # if hyp.do_lescroart_moc:
 #     from backend import inputs_lescroart as inputs
@@ -18,12 +19,16 @@ from backend import saverloader
 # from backend import inputs_lescroart as inputs2\
 
 # %matplotlib inline
+import matplotlib.pyplot as plt
+# matplotlib.use('TkAgg')
 import sys
 sys.path.append('./omnidata/omnidata_tools/torch')
 import os, sys; sys.path.append(os.path.expanduser(os.getcwd()))
 from dataloader.pytorch_lightning_datamodule import OmnidataDataModule
-os.environ['OMNIDATA_PATH'] = '/home/gsarch/repo/grnn_coco/pytorch_disco/omnidata'
-os.environ['OMNIDATA_CACHE_PATH'] = '/home/gsarch/repo/grnn_coco/pytorch_disco/omnidata/.cache'
+from dataloader.pytorch3d_utils import *
+from dataloader.viz_utils import *
+os.environ['OMNIDATA_PATH'] = '/lab_data/tarrlab/gsarch/omnidata/omnidata_starter_dataset'
+os.environ['OMNIDATA_CACHE_PATH'] = '/lab_data/tarrlab/scratch/gsarch/omnidata/omnidata_starter_dataset/.cache'
 
 # from backend import inputs3 as inputs
 
@@ -76,12 +81,11 @@ class OMNIDATA_MOC(Model):
 
     def get_dataloader(
         self, 
+
         ):
 
-        st()
-
         dm = OmnidataDataModule(
-            tasks = ['point_info', 'rgb', 'depth_euclidean', 'normal', 'mask_valid'],
+            tasks = ['point_info', 'rgb', 'depth_euclidean', 'mask_valid'],
             train_datasets_to_options = dict(
                     # TaskonomyDataset = dict(data_amount='tiny', data_path='/datasets/omnidata/ta/'),
                     ReplicaDataset   = dict()
@@ -98,18 +102,25 @@ class OMNIDATA_MOC(Model):
                     cache_dir    = os.environ['OMNIDATA_CACHE_PATH'],
                     image_size   = 512,
                     multiview_sampling_method = 'FILENAME', # Works for Taskonomy, Replica
-                    n_workers    = None,
+                    n_workers    = 4,
                     # force_refresh_tmp = True,
-                    num_positive = 3,
+                    num_positive = hyp.S,
                 ),
                 train_options  = dict(),
                 eval_options   = dict(),
-                dataloader_kwargs = dict(batch_size=4),
+                dataloader_kwargs = dict(batch_size=hyp.batch_sizes["train"]),
         )
         dm.setup(stage='val')
+        dm.setup(stage='train')
 
+        dl_val = dm.val_dataloader()[0]
+        dl_train = dm.train_dataloader()
+
+        dl = {}
+        dl["train"] = dl_train
+        dl["val"] = dl_val
         
-        return all_inputs
+        return dl
             
     # override go from base
     def go(self):
@@ -165,7 +176,7 @@ class OMNIDATA_MOC(Model):
                 set_seqlens.append(hyp.seqlens[set_name])
                 set_batch_sizes.append(hyp.batch_sizes[set_name])
                 set_inputs.append(all_inputs[set_name])
-                # if set_name in ["train"]:
+                print(set_inputs[-1])
                 #     set_inputs2.append(all_inputs2[set_name])
                 #     set_inputs3.append(all_inputs3[set_name])
                 # else:
@@ -183,48 +194,32 @@ class OMNIDATA_MOC(Model):
                 #     set_loaders2.append(None)
                 #     set_loaders3.append(None)
 
-        for step in tqdm(range(self.start_iter+1, hyp.max_iters+1)):
-            # for i, (set_input) in enumerate(set_inputs):
-            #     if step % len(set_input) == 0: #restart after one epoch. Note this does nothing for the tfrecord loader
-            #         set_loaders[i] = iter(set_input)
-
-            # for i, (set_input2) in enumerate(set_inputs2):
-            #     if step % len(set_input2) == 0: #restart after one epoch. Note this does nothing for the tfrecord loader
-            #         set_loaders2[i] = iter(set_input2)
-
-            # for i, (set_input3) in enumerate(set_inputs3):
-            #     if step % len(set_input3) == 0: #restart after one epoch. Note this does nothing for the tfrecord loader
-            #         set_loaders3[i] = iter(set_input3)
+        
+        metric_logger = MetricLogger(delimiter="  ")
+        header = f'TRAIN | {hyp.name}'
+        for step in metric_logger.log_every(range(self.start_iter+1, hyp.max_iters+1), 10, header):
 
             for (set_num,
                  set_name,
                  set_seqlen,
                  set_batch_size,
                  set_input,
-                 set_input2,
-                 set_input3,
                  set_writer,
                  set_log_freq,
                  set_do_backprop,
                  set_dict,
                  set_loader,
-                 set_loader2,
-                 set_loader3,
             ) in zip(
                 set_nums,
                 set_names,
                 set_seqlens,
                 set_batch_sizes,
                 set_inputs,
-                set_inputs2,
-                set_inputs3,
                 set_writers,
                 set_log_freqs,
                 set_do_backprops,
                 set_dicts,
                 set_loaders,
-                set_loaders2,
-                set_loaders3,
             ):   
 
                 log_this = np.mod(step, set_log_freq)==0
@@ -243,9 +238,11 @@ class OMNIDATA_MOC(Model):
 
                     # print(set_name)
 
-                    dataloader_index = step % num_dataloaders
-                    if set_name in ["val", "test"]:
-                        dataloader_index = 0
+                    # dataloader_index = step % num_dataloaders
+                    # if set_name in ["val", "test"]:
+                    #     dataloader_index = 0
+
+
                     try:
                         feed = next(set_loader)
                     except StopIteration:
@@ -254,6 +251,54 @@ class OMNIDATA_MOC(Model):
                             set_loaders[i] = iter(set_input)
                         continue
                         # feed = next(set_loader)
+
+                    visualize = False
+                    if visualize:
+                        
+
+                        # # Show the RGB image
+                        # show_batch_images(feed, batch_idx=0, view_idxs=[0,1,2], keys=['rgb'])
+
+                        # show_batch_scene(feed, batch_idx=0, view_idxs=[0,1,2])
+                        
+                        batch_idx = 0
+                        view_idxs=[0,1]
+                        pos        = feed.get('positive', feed)
+                        bpv        = pos['building'][batch_idx], pos['point'][batch_idx], pos['view'][batch_idx]
+                        dataset    = pos['dataset'][batch_idx]
+                        mask_valid = pos['mask_valid'].bool()[batch_idx,view_idxs]#.squeeze(1)
+                        distance   = pos['depth_euclidean'][batch_idx,view_idxs]#.squeeze(1)
+                        rgb        = pos['rgb'][batch_idx,view_idxs].unsqueeze(1)
+                        cam_params = { k: v[batch_idx,view_idxs].unsqueeze(1)
+                                    for (k, v) in get_batch_cam_params(pos).items()}
+                        pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=distance, features=rgb, **cam_params)
+                        cameras    = GenericPinholeCamera(
+                                        R=cam_params['cam_to_world_R'].squeeze(1),
+                                        T=cam_params['cam_to_world_T'].squeeze(1),
+                                        K=cam_params['proj_K'].squeeze(1),
+                                        K_inv=cam_params['proj_K_inv'].squeeze(1),
+                                        device=distance.device)
+                        pcs_full   = join_pointclouds_as_batch(pcs_full)
+
+                        field = "points" 
+                        field_list = [getattr(p, field + "_list")() for p in pcs_full]
+                        field_list = torch.stack([f[0] for f in field_list])
+                        # print(field_list)
+                        # print(field_list.shape)
+                        # print(len(field_list))
+                        # print(field_list[0][0].shape)
+                        # print(len(field_list[0]))
+
+                        # print(pcs_full.shape)
+                        # print(cameras.shape)
+
+                    # extract output from omnidata
+                    for k in feed['positive']:
+                        # print(k)
+                        # if isinstance(feed['positive'][k], dict):
+                        #     feed['positive'][k] = {j:feed['positive'][k][j].cuda(non_blocking=True) for j in feed['positive'][k].keys()}
+                        feed[k] = feed['positive'][k] #.cuda(non_blocking=True)
+                    del feed['positive']
 
                     feed_cuda = {}
                     for k in feed:
@@ -289,6 +334,8 @@ class OMNIDATA_MOC(Model):
                         self.optimizer.zero_grad()
                         loss.backward()
                         self.optimizer.step()
+
+                    metric_logger.update(loss=loss)
 
                     if hyp.do_emb3d:
                         def update_slow_network(slow_net, fast_net, beta=0.999):
@@ -394,134 +441,250 @@ class CarlaMocModel(nn.Module):
         __p = lambda x: utils.basic.pack_seqdim(x, self.B)
         __u = lambda x: utils.basic.unpack_seqdim(x, self.B)
         
-        # self.rgb_camRs = feed["rgb_camRs"]
-        self.rgb_camXs = feed["rgb_camXs"].float()
-        self.pix_T_cams = feed["pix_T_cams"].float()
+        self.rgb_camXs = feed["rgb"]-0.5
+        self.depth_camXs = feed["depth_euclidean"]
+        self.mask_valid_camXs = feed["mask_valid"]
+        self.point_info = feed["point_info"]
+        self.point = feed["point"]
+        self.building = feed["building"]
+        self.view = feed["view"]
+        self.dataset = feed["dataset"]
 
-        if 'origin_T_camRs' in feed:
-            self.origin_T_camRs = feed["origin_T_camRs"]
-        elif 'camR_T_origin'in feed:
-            self.origin_T_camRs = __u(utils.geom.safe_inverse(__p(feed["camR_T_origin"]))).float()
-        elif 'camRs_T_origin'in feed:
-            self.origin_T_camRs = __u(utils.geom.safe_inverse(__p(feed["camRs_T_origin"]))).float()
-        else:
-            assert(False) # need camR info
-        self.origin_T_camXs = feed["origin_T_camXs"].float()
-
-        self.camX0s_T_camXs = utils.geom.get_camM_T_camXs(self.origin_T_camXs, ind=0)
-        self.camR0s_T_camRs = utils.geom.get_camM_T_camXs(self.origin_T_camRs, ind=0)
-        self.camRs_T_camR0 = __u(utils.geom.safe_inverse(__p(self.camR0s_T_camRs)))
-        self.camRs_T_camXs = __u(torch.matmul(utils.geom.safe_inverse(__p(self.origin_T_camRs)), __p(self.origin_T_camXs)))
-        self.camXs_T_camRs = __u(utils.geom.safe_inverse(__p(self.camRs_T_camXs)))
-        self.camXs_T_camX0s = __u(utils.geom.safe_inverse(__p(self.camX0s_T_camXs)))
-        self.camX0_T_camR0 = utils.basic.matmul2(self.camX0s_T_camXs[:,0], self.camXs_T_camRs[:,0])
-        self.camR0s_T_camXs = utils.basic.matmul2(self.camR0s_T_camRs, self.camRs_T_camXs)
-        
-        self.H, self.W, self.V, self.N = hyp.H, hyp.W, hyp.V, hyp.N
-        # override H and W
-        self.H = self.rgb_camXs.shape[-2]
-        self.W = self.rgb_camXs.shape[-1]
-        self.PH, self.PW = hyp.PH, hyp.PW
-        self.K = hyp.K
         self.Z, self.Y, self.X = hyp.Z, hyp.Y, hyp.X
         self.Z1, self.Y1, self.X1 = int(self.Z/1), int(self.Y/1), int(self.X/1)
         self.Z2, self.Y2, self.X2 = int(self.Z/2), int(self.Y/2), int(self.X/2)
         self.Z4, self.Y4, self.X4 = int(self.Z/4), int(self.Y/4), int(self.X/4)
+        self.W = self.rgb_camXs.shape[-2]
+        self.H = self.rgb_camXs.shape[-1]
 
-        self.xyz_camXs = feed["xyz_camXs"].float()
-        self.xyz_camRs = __u(utils.geom.apply_4x4(__p(self.camRs_T_camXs), __p(self.xyz_camXs)))
-        self.xyz_camX0s = __u(utils.geom.apply_4x4(__p(self.camX0s_T_camXs), __p(self.xyz_camXs)))
-        self.xyz_camR0s = __u(utils.geom.apply_4x4(__p(self.camR0s_T_camRs), __p(self.xyz_camRs)))
+        view_idxs=list(np.arange(self.S))
+        self.xyz_camRs = []
+        self.pix_T_cams = []
+        self.vox_utils = []
+        self.occXs = []
+        self.unpXs = []
+        self.occ_halfmemX0_sup = []
+        self.free_halfmemX0_sup = []
+        for batch_idx in range(self.B):
+            # pos        = feed.get('positive', feed)
+            bpv        = feed['building'][batch_idx], feed['point'][batch_idx], feed['view'][batch_idx]
+            dataset    = feed['dataset'][batch_idx]
+            mask_valid = feed['mask_valid'].bool()[batch_idx,view_idxs]#.squeeze(1)
+            distance   = feed['depth_euclidean'][batch_idx,view_idxs]#.squeeze(1)
+            rgb        = feed['rgb'][batch_idx,view_idxs].unsqueeze(1)
+            cam_params = { k: v[batch_idx,view_idxs].unsqueeze(1).cuda(non_blocking=True)
+                        for (k, v) in get_batch_cam_params(feed).items()}
+            # print("cam_params", cam_params)
+            pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=distance, features=rgb, **cam_params)
+            cameras    = GenericPinholeCamera(
+                            R=cam_params['cam_to_world_R'].squeeze(1),
+                            T=cam_params['cam_to_world_T'].squeeze(1),
+                            K=cam_params['proj_K'].squeeze(1),
+                            K_inv=cam_params['proj_K_inv'].squeeze(1),
+                            device=distance.device)
+            pcs_full   = join_pointclouds_as_batch(pcs_full)
 
-        if feed['set_name']=='test':
-            self.box_camRs = feed["box_traj_camR"]
-            # box_camRs is B x S x 9
-            self.score_s = feed["score_traj"]
-            self.tid_s = torch.ones_like(self.score_s).long()
-            self.lrt_camRs = utils.geom.convert_boxlist_to_lrtlist(self.box_camRs)
-            self.lrt_camXs = utils.geom.apply_4x4s_to_lrts(self.camXs_T_camRs, self.lrt_camRs)
-            self.lrt_camX0s = utils.geom.apply_4x4s_to_lrts(self.camX0s_T_camXs, self.lrt_camXs)
-            self.lrt_camR0s = utils.geom.apply_4x4s_to_lrts(self.camR0s_T_camRs, self.lrt_camRs)
+            print(distance.shape)
+            xyz_camX = cameras.unproject_metric_depth_euclidean(distance.squeeze(1), world_coordinates=False).reshape(len(cameras), -1, 3)
+            # xyz_camX = [pts[keep.reshape(-1)]   for pts, keep in zip(xyz_camX, mask_valid)]
 
-        # if hyp.do_midas_depth_estimation:
+            world_to_view_transform = cameras.get_world_to_view_transform().get_matrix()
+            view_to_world_transform = cameras.get_world_to_view_transform().inverse().get_matrix()
+            # print("world_to_view_transform", world_to_view_transform)
+            # print("view_to_world_transform", view_to_world_transform)
+            # camX_T_camW = utils.geom.merge_rt(cam_params['cam_to_world_R'].squeeze(1), cam_params['cam_to_world_T'].squeeze(1))
+            # camW_T_camX = utils.geom.safe_inverse(camX_T_camW)
+            # print("camX_T_camW", camX_T_camW)
+            # print("camW_T_camX", camW_T_camX)
+            # assert(False)
 
-        #     # estimate depth
-        #     rgb_camXs_midas = ((self.rgb_camXs.view(self.B*self.S,3,self.W,self.H).permute(0,2,3,1).detach().cpu().numpy()+0.5) * 255).astype(np.uint8)
-        #     input_batch = []
-        #     for b in range(self.B):
-        #         input_batch.append(self.transform(rgb_camX[b]).cuda())
-        #     input_batch = torch.cat(input_batch, dim=0)
-        #     with torch.no_grad():
-        #         depth_cam = self.midas(input_batch).unsqueeze(1)
-        #         depth_cam = (torch.max(depth_cam) - depth_cam) / 1000.0
+            field = "points" 
+            field_list = [getattr(p, field + "_list")() for p in pcs_full]
+            # field_list = torch.stack([f[0] for f in field_list])
+            field_list = [f[0] for f in field_list]
+            print(field_list[0].shape)
+            print(field_list[0])
 
-        if hyp.fit_vox:
-            self.vox_utils = []
-            # if "depth_at_center" in feed.keys():
-            #     offset_x, offset_y, offset_z = feed["depth_at_center"].cpu().numpy()
-            # else:
-            #     offset_x, offset_y, offset_z = 0., 0., 0. 
-            for b in range(self.B):
+            xyz_maxs = torch.max(field_list[0], dim=0)[0]
+            xyz_mins = torch.min(field_list[0], dim=0)[0]
+            xyz_means = torch.mean(field_list[0], dim=0).cpu().numpy()
+            # print(xyz_means)
+            # print(xyz_maxs)
+            # print(xyz_mins)
+
+            pix_T_cams = cam_params['proj_K'].squeeze(1)
+            self.pix_T_cams.append(pix_T_cams)
+            
+            # camX_T_camW = utils.geom.merge_rt(cam_params['cam_to_world_R'].squeeze(1), cam_params['cam_to_world_T'].squeeze(1))
+            # camW_T_camX = utils.geom.safe_inverse(camX_T_camW)
+            
+            pixX0_T_camW = utils.basic.matmul2(pix_T_cams, view_to_world_transform)
+
+            scene_centroid_x_noise = np.random.normal(0, 0.2) #+ offset_x
+            scene_centroid_y_noise = np.random.normal(0, 0.2) #+ offset_y
+            scene_centroid_z_noise = np.random.normal(0, 0.2) #+ offset_z
+
+            xyz_max = int(torch.clip(max(xyz_maxs), max=20.0).cpu().numpy()) / 2.
+            scene_centroid_B = torch.tensor([int(scene_centroid_x_noise+xyz_means[0]), int(scene_centroid_y_noise+xyz_means[1]), int(xyz_means[2]+scene_centroid_z_noise)]).cuda().squeeze(0).reshape(1,3)
+            bounds_B = torch.tensor([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
+
+            # self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=True))
+            self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, assert_cube=True))
+            occXs_ = []
+            unpXs_ = []
+            occ_halfmemX0_sup = []
+            free_halfmemX0_sup = []
+            
+            for s in range(self.S):
+                occXs = self.vox_utils[-1].voxelize_xyz(field_list[s].unsqueeze(0), self.Z, self.Y, self.X)
+                occXs_.append(occXs)
                 
-                xyz_maxs = torch.max(self.xyz_camXs[b:b+1,1], dim=1)[0]
-                xyz_mins = torch.min(self.xyz_camXs[b:b+1,1], dim=1)[0]
+                unpXs = self.vox_utils[-1].unproject_rgb_to_mem(
+                    self.rgb_camXs[batch_idx, s].unsqueeze(0), self.Z, self.Y, self.X, pixX0_T_camW[s].unsqueeze(0))
+                unpXs_.append(unpXs)
 
-                # print(xyz_maxs)
-                # print(xyz_mins)
+            occ_halfmemX0_sup_, free_halfmemX0_sup_, _, _ = self.vox_utils[-1].prep_occs_supervision(
+                view_to_world_transform.unsqueeze(0),
+                xyz_camX.unsqueeze(0),
+                self.Z4, self.Y4, self.X4,
+                agg=True)
 
-                # shift_am = torch.tensor([(xyz_maxs[0][0] - torch.abs(xyz_mins[0][0]))/2., 0., 0.]).cuda().unsqueeze(0).unsqueeze(0)
-                # xyz_camXs = xyz_camXs - shift_am
-                # xyz_max = torch.max(xyz_camXs)
-                scene_centroid_x_noise = np.random.normal(0, 0.2) #+ offset_x
-                scene_centroid_y_noise = np.random.normal(0, 0.2) #+ offset_y
-                scene_centroid_z_noise = np.random.normal(0, 0.2) #+ offset_z
-                if "depth_at_center" in feed.keys():
-                    depth_at_center, center_to_boundary = (feed["depth_at_center"], feed["center_to_boundary"])
-                    scene_centroid_B = torch.tensor([0.0+scene_centroid_x_noise, 0.0+scene_centroid_y_noise, depth_at_center[b]+scene_centroid_z_noise]).unsqueeze(0).repeat(self.B,1).cuda()
-                    center_to_boundary = center_to_boundary[b] #torch.max(center_to_boundary)
-                    bounds_B = torch.tensor([-center_to_boundary, center_to_boundary, -center_to_boundary, center_to_boundary, -center_to_boundary, center_to_boundary]).cuda()
-                else:
-                    xyz_max = torch.clip(torch.max(xyz_maxs, dim=1)[0], max=20.0) / 2.
-                    scene_centroid_B = torch.tensor([np.zeros(1)+scene_centroid_x_noise, np.zeros(1)+scene_centroid_y_noise, xyz_max+scene_centroid_z_noise]).cuda().squeeze(0).reshape(1,3)
-                    # scene_centroid_B = torch.tensor([np.zeros(1)+scene_centroid_x_noise, np.zeros(1)+scene_centroid_y_noise, xyz_max+scene_centroid_z_noise]).cuda().squeeze(0).reshape(1,3)
-                    bounds_B = torch.stack([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
+            self.occXs.append(torch.stack(occXs_))
+            self.unpXs.append(torch.stack(unpXs_))
 
-                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=True))
-        else:
-            if feed['set_name']=='test':
-                # center on an object, so that it does not fall out of bounds
-                scene_centroid = utils.geom.get_clist_from_lrtlist(self.lrt_camXs)[:,0]
-            else:
-                # center randomly 
-                scene_centroid_x_noise = np.random.normal(0, 0.2)
-                scene_centroid_y_noise = np.random.normal(0, 0.2)
-                scene_centroid_z_noise = np.random.normal(0, 0.2)
-                sc_noise = np.array([scene_centroid_x_noise, scene_centroid_y_noise, scene_centroid_z_noise])
-                # scene_centroid = torch.median(self.xyz_camXs[0,0], dim=0)[0] + torch.from_numpy(sc_noise).float().cuda()
-                # scene_centroid = np.array([scene_centroid_x,
-                #                            scene_centroid_y,
-                #                            scene_centroid_z]).reshape([1, 3])
-                # scene_centroid = scene_centroid.float().cuda().reshape([1, 3])
-                # print(sc_noise)
-                scene_centroid = torch.from_numpy(sc_noise).float().cuda().reshape([1, 3])
+            self.occ_halfmemX0_sup.append(occ_halfmemX0_sup_)
+            self.free_halfmemX0_sup.append(free_halfmemX0_sup_)   
 
-            self.vox_util = utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid=scene_centroid, assert_cube=True)
+            if batch_idx==0 and self.summ_writer.save_this:
 
+                def _broadcast_bmm(a, b) -> torch.Tensor:
+                    """
+                    Batch multiply two matrices and broadcast if necessary.
 
-        depth_camXs_, valid_camXs_ = utils.geom.create_depth_image(__p(self.pix_T_cams), __p(self.xyz_camXs), self.H, self.W)
-        dense_xyz_camXs_ = utils.geom.depth2pointcloud(depth_camXs_, __p(self.pix_T_cams))
-        dense_xyz_camRs_ = utils.geom.apply_4x4(__p(self.camRs_T_camXs), dense_xyz_camXs_)
+                    Args:
+                        a: torch tensor of shape (P, K) or (M, P, K)
+                        b: torch tensor of shape (N, K, K)
 
-        dense_xyz_camRs_ = dense_xyz_camRs_.reshape(self.B, self.S, dense_xyz_camRs_.shape[1], dense_xyz_camRs_.shape[2])
-        inbound_camXs__ = []
-        for b in range(self.B):
-            inbound_camXs_ = self.vox_utils[b].get_inbounds(dense_xyz_camRs_[b], self.Z, self.Y, self.X).float()
-            inbound_camXs__.append(inbound_camXs_)
-        inbound_camXs_ = torch.stack(inbound_camXs__)
-        inbound_camXs_ = inbound_camXs_.reshape(self.B*self.S, inbound_camXs_.shape[2])
-        inbound_camXs_ = torch.reshape(inbound_camXs_, [self.B*self.S, 1, self.H, self.W])
-        # depth_camXs = __u(depth_camXs_)
-        self.valid_camXs = __u(valid_camXs_) * __u(inbound_camXs_)
+                    Returns:
+                        a and b broadcast multiplied. The output batch dimension is max(N, M).
+
+                    To broadcast transforms across a batch dimension if M != N then
+                    expect that either M = 1 or N = 1. The tensor with batch dimension 1 is
+                    expanded to have shape N or M.
+                    """
+                    if a.dim() == 2:
+                        a = a[None]
+                    if len(a) != len(b):
+                        if not ((len(a) == 1) or (len(b) == 1)):
+                            msg = "Expected batch dim for bmm to be equal or 1; got %r, %r"
+                            raise ValueError(msg % (a.shape, b.shape))
+                        if len(a) == 1:
+                            a = a.expand(len(b), -1, -1)
+                        if len(b) == 1:
+                            b = b.expand(len(a), -1, -1)
+                    return a.bmm(b)
+
+                def transform_points(points, composed_matrix, eps: Optional[float] = None) -> torch.Tensor:
+                    """
+                    Use this transform to transform a set of 3D points. Assumes row major
+                    ordering of the input points.
+
+                    Args:
+                        points: Tensor of shape (P, 3) or (N, P, 3)
+                        eps: If eps!=None, the argument is used to clamp the
+                            last coordinate before performing the final division.
+                            The clamping corresponds to:
+                            last_coord := (last_coord.sign() + (last_coord==0)) *
+                            torch.clamp(last_coord.abs(), eps),
+                            i.e. the last coordinates that are exactly 0 will
+                            be clamped to +eps.
+
+                    Returns:
+                        points_out: points of shape (N, P, 3) or (P, 3) depending
+                        on the dimensions of the transform
+                    """
+                    points_batch = points.clone()
+                    if points_batch.dim() == 2:
+                        points_batch = points_batch[None]  # (P, 3) -> (1, P, 3)
+                    if points_batch.dim() != 3:
+                        msg = "Expected points to have dim = 2 or dim = 3: got shape %r"
+                        raise ValueError(msg % repr(points.shape))
+
+                    N, P, _3 = points_batch.shape
+                    ones = torch.ones(N, P, 1, dtype=points.dtype, device=points.device)
+                    points_batch = torch.cat([points_batch, ones], dim=2)
+
+                    # composed_matrix = self.get_matrix()
+                    points_out = _broadcast_bmm(points_batch, composed_matrix)
+                    denom = points_out[..., 3:]  # denominator
+                    if eps is not None:
+                        denom_sign = denom.sign() + (denom == 0.0).type_as(denom)
+                        denom = denom_sign * torch.clamp(denom.abs(), eps)
+                    points_out = points_out[..., :3] / denom
+
+                    # When transform is (1, 4, 4) and points is (P, 3) return
+                    # points_out of shape (P, 3)
+                    if points_out.shape[0] == 1 and points.dim() == 2:
+                        points_out = points_out.reshape(points.shape)
+
+                    return points_out
+
+                # plot occupancy supervision
+                # camRs_T_camXs_ = __p(cameras.get_world_to_view_transform().inverse().get_matrix().unsqueeze(0))
+                camRs_T_camXs = cameras.get_world_to_view_transform().inverse().get_matrix()
+                # xyz_camXs_ = __p(xyz_camX.unsqueeze(0))
+                xyz_camRs = cameras.get_world_to_view_transform().inverse().transform_points(xyz_camX)
+                print(xyz_camRs.shape)
+                print(xyz_camRs[0])
+                xyz_camRs = transform_points(xyz_camX, cameras.get_world_to_view_transform().inverse().get_matrix())
+                print(xyz_camRs.shape)
+                print(xyz_camRs[0])
+                # assert(False)
+                # print(camRs_T_camXs_)
+                # print(camRs_T_camXs.shape)
+                # print(xyz_camX.shape)
+                xyz_camRs = utils.geom.apply_4x4(camRs_T_camXs, xyz_camX)
+                print(mask_valid.shape)
+                xyz_camRs = [pts[keep.reshape(-1)]   for pts, keep in zip(xyz_camRs, mask_valid)]
+                # print(xyz_camXs_.shape, camRs_T_camXs_.shape)
+                # B, N, _ = list(xyz_camXs_.shape)
+                # ones = torch.ones_like(xyz_camXs_[:,:,0:1])
+                # xyz1 = torch.cat([xyz_camXs_, ones], 2)
+                # xyz1_t = torch.transpose(xyz_camXs_, 1, 2)
+                # # this is B x 4 x N
+                # xyz2_t = torch.matmul(camRs_T_camXs_, xyz1_t)
+                # xyz2 = torch.transpose(xyz2_t, 1, 2)
+                # xyz2 = xyz2[:,:,:3]
+                print(xyz_camRs[0].shape)
+                print(xyz_camRs[0])
+                assert(False)
+                occXs_ = self.vox_utils[-1].voxelize_xyz(xyz_camXs_, self.Z4, self.Y4, self.X4)
+                occRs_ = self.vox_utils[-1].voxelize_xyz(xyz_camRs_, self.Z4, self.Y4, self.X4)
+                freeXs_ = self.vox_utils[-1].get_freespace(xyz_camXs_, occXs_)
+                freeRs_ = self.vox_utils[-1].apply_4x4_to_vox(camRs_T_camXs_, freeXs_)
+                occXs = __u(occXs_)
+                occRs = __u(occRs_)
+                freeXs = __u(freeXs_)
+                freeRs = __u(freeRs_)
+
+                # print(occXs.shape, occRs.shape, freeXs.shape, freeRs.shape)
+                # print(self.occXs[-1].squeeze().unsqueeze(0).shape)
+
+                self.summ_writer.summ_occs('occ/occX0s_input', self.occXs[-1].squeeze().unsqueeze(0).unsqueeze(2).unbind(1), reduce_axes=[3])
+                # self.summ_writer.summ_occs('occ/occXs_input', occXs.unbind(1), reduce_axes=[3])
+                # self.summ_writer.summ_occs('occ/occRs_input', occRs.unbind(1), reduce_axes=[3])
+                self.summ_writer.summ_occ('occ/occR0_input', occRs[:,0], reduce_axes=[3])
+                self.summ_writer.summ_occ('occ/occR1_input', occRs[:,1], reduce_axes=[3])
+                self.summ_writer.summ_occ('occ/occR_input_combined', torch.cat(occRs.unbind(1), dim=3), reduce_axes=[3])
+                # self.summ_writer.summ_occs('occ/freeXs_input', freeXs.unbind(1), reduce_axes=[3])
+                # self.summ_writer.summ_occs('occ/freeRs_input', freeRs.unbind(1), reduce_axes=[3])
+
+            # self.xyz_camRs.append(field_list)
+            # print(field_list.shape)
+        self.occXs = torch.stack(self.occXs).squeeze(2)
+        self.unpXs = torch.stack(self.unpXs).squeeze(2)
+        self.occ_halfmemX0_sup = torch.cat(self.occ_halfmemX0_sup, dim=0)
+        self.free_halfmemX0_sup = torch.cat(self.free_halfmemX0_sup, dim=0)
 
         all_ok = True
         return all_ok
@@ -548,176 +711,79 @@ class CarlaMocModel(nn.Module):
         # we'll encode X1/R1 with slow net, and use this for emb loss
 
         self.summ_writer.summ_rgbs(f'inputs/rgbs', self.rgb_camXs.unbind(1))
+        self.summ_writer.summ_unps('inputs/unps', self.unpXs.unbind(1), self.occXs.unbind(1))
         
         if hyp.do_feat3d:
             assert(self.S==2)
-            # occ_memX0 = self.vox_util.voxelize_xyz(self.xyz_camXs[:,0], self.Z, self.Y, self.X)
-            # unp_memX0 = self.vox_util.unproject_rgb_to_mem(
-            #     self.rgb_camXs[:,0], self.Z, self.Y, self.X, self.pix_T_cams[:,0])
-            # feat_memX0_input = torch.cat([occ_memX0, occ_memX0*unp_memX0], dim=1)
-            # feat3d_loss, feat_halfmemX0, _ = self.feat3dnet(
-            #     feat_memX0_input,
-            #     self.summ_writer,
-            # )
-            # total_loss += feat3d_loss
-            
-            # valid_halfmemX0 = torch.ones_like(feat_halfmemX0[:,0:1])
-            # # warp things to R0, for loss
-            # feat_halfmemR = self.vox_util.apply_4x4_to_vox(self.camR0s_T_camXs[:, 0], feat_halfmemX0)
-            # valid_halfmemR = self.vox_util.apply_4x4_to_vox(self.camR0s_T_camXs[:, 0], valid_halfmemX0)
 
-            # occ_memX0_ = self.vox_util.voxelize_xyz(__p(self.xyz_camXs), self.Z, self.Y, self.X)
-            occXs_ = []
-            for b in range(self.B):
-                occXs = self.vox_utils[b].voxelize_xyz(self.xyz_camXs[b], self.Z, self.Y, self.X)
-                occXs_.append(occXs)
-            occXs = torch.stack(occXs_)
-            # unp_memX0 = self.vox_util.unproject_rgb_to_mem(
-            #     __p(self.rgb_camXs), self.Z, self.Y, self.X, self.pix_T_cams[:,0])
-            unpXs_ = []
-            for b in range(self.B):
-                unpXs = self.vox_utils[b].unproject_rgb_to_mem(
-                    self.rgb_camXs[b], self.Z, self.Y, self.X, self.pix_T_cams[b])
-                unpXs_.append(unpXs)
-            unpXs = torch.stack(unpXs_)
-            
-            # feat_memX0_input = torch.cat([occ_memX0, occ_memX0*unp_memX0], dim=1)
-            featXs_input = torch.cat([occXs, occXs*unpXs], dim=2)
-            featXs_input_ = __p(featXs_input)
-            feat3d_loss, feat_halfmemXs, _ = self.feat3dnet(
-                featXs_input_,
+            featX0_input = torch.cat([self.occXs[:,1:2], self.occXs[:,1:2]*self.unpXs[:,1:2]], dim=2)
+            featX0_input_ = __p(featX0_input)
+            feat3d_loss, feat_halfmemX0, _ = self.feat3dnet(
+                featX0_input_,
                 summ_writer=self.summ_writer,
                 # set_name=set_name,
             )
             total_loss += feat3d_loss
 
-            feat_halfmemXs = feat_halfmemXs.reshape(self.B, self.S, feat_halfmemXs.shape[1], self.Z4, self.Y4, self.X4)
-            
-            feat_halfmemX0 = feat_halfmemXs[:, 0:1]
-            feat_halfmemX1 = feat_halfmemXs[:, 1:2]
-            valid_halfmemX0 = torch.ones_like(feat_halfmemX0[:,:,0:1])
+            valid_halfmemX0 = torch.ones_like(feat_halfmemX0[:,0:1])
 
-            # warp things to R0, for loss
-            feat_halfmemR = []
-            valid_halfmemR = []
-            for b in range(self.B):
-                feat_halfmemR.append(self.vox_utils[b].apply_4x4_to_vox(self.camR0s_T_camXs[b, 0:1], feat_halfmemX0[b]))
-                valid_halfmemR.append(self.vox_utils[b].apply_4x4_to_vox(self.camR0s_T_camXs[b, 0:1], valid_halfmemX0[b]))
-            feat_halfmemR = torch.stack(feat_halfmemR)
-            valid_halfmemR = torch.stack(valid_halfmemR)
-
-            # # warp things to X0, for loss
-            # feat_halfmemX0 = []
-            # valid_halfmemX0 = []
-            # for b in range(self.B):
-            #     feat_halfmemX0.append(self.vox_utils[b].apply_4x4_to_vox(self.camX0s_T_camXs[b, 0:1], feat_halfmemX0[b]))
-            #     valid_halfmemX0.append(self.vox_utils[b].apply_4x4_to_vox(self.camX0s_T_camXs[b, 0:1], valid_halfmemX0[b]))
-            # feat_halfmemX0 = torch.stack(feat_halfmemX0)
-            # valid_halfmemX0 = torch.stack(valid_halfmemX0)
-
-            # self.summ_writer.summ_feat('feat3d/feat_halfmemX1_input', feat_halfmemX1_input, pca=True)
-            self.summ_writer.summ_feat(f'feat3d/feat_halfmemX0', feat_halfmemX0[0], valid=valid_halfmemX0[0], pca=True)
-            self.summ_writer.summ_feat(f'feat3d/feat_halfmemR', feat_halfmemR[0], valid=valid_halfmemR[0], pca=True)
-            self.summ_writer.summ_oned(f'feat3d/valid_halfmemR', valid_halfmemR[0], bev=True, norm=False)
+            # self.summ_writer.summ_feat(f'feat3d/feat_halfmemX0', feat_halfmemX0[0], valid=valid_halfmemX0[0], pca=True)
 
             if hyp.do_emb3d:
 
-                if use_camR:
-                    pixR_T_camX1 = utils.basic.matmul2(self.pix_T_cams[:,1], self.camRs_T_camXs[:,1])
-                    occ_memR = []
-                    unp_memR = []
-                    for b in range(self.B):
-                        occ_memR.append(self.vox_utils[b].voxelize_xyz(self.xyz_camRs[b:b+1,0], self.Z, self.Y, self.X))
-                        unp_memR.append(self.vox_utils[b].unproject_rgb_to_mem(self.rgb_camXs[b:b+1,1], self.Z, self.Y, self.X, pixR_T_camX1[b:b+1]))
-                    occ_memR = __p(torch.stack(occ_memR))
-                    unp_memR = __p(torch.stack(unp_memR))
-                    feat_memR_input = torch.cat([occ_memR, occ_memR*unp_memR], dim=1)
-                    _, altfeat_halfmemR, _ = self.feat3dnet_slow(feat_memR_input)
-                    altvalid_halfmemR = torch.ones_like(altfeat_halfmemR[:,0:1])
-                    self.summ_writer.summ_feat(f'feat3d/feat_memR_input', feat_memR_input, pca=True)
-                    self.summ_writer.summ_feat(f'feat3d/altfeat_halfmemR', altfeat_halfmemR, valid=altvalid_halfmemR, pca=True)
-                    self.summ_writer.summ_oned(f'feat3d/altvalid_halfmemR', altvalid_halfmemR, bev=True, norm=False)
-                else:
-                    pixX0_T_camX1 = utils.basic.matmul2(self.pix_T_cams[:,1], self.camX0s_T_camXs[:,1])
-                    occ_memX0 = []
-                    unp_memX0 = []
-                    for b in range(self.B):
-                        occ_memX0.append(self.vox_utils[b].voxelize_xyz(self.xyz_camX0s[b:b+1,1], self.Z, self.Y, self.X))
-                        unp_memX0.append(self.vox_utils[b].unproject_rgb_to_mem(self.rgb_camXs[b:b+1,1], self.Z, self.Y, self.X, pixX0_T_camX1[b:b+1]))
-                    occ_memX0 = __p(torch.stack(occ_memX0))
-                    unp_memX0 = __p(torch.stack(unp_memX0))
-                    feat_memX0_input = torch.cat([occ_memX0, occ_memX0*unp_memX0], dim=1)
-                    _, altfeat_halfmemX0, _ = self.feat3dnet_slow(feat_memX0_input)
-                    altvalid_halfmemX0 = torch.ones_like(altfeat_halfmemX0[:,0:1])
-                    self.summ_writer.summ_feat(f'feat3d/feat_memX0_input', feat_memX0_input, pca=True)
-                    self.summ_writer.summ_feat(f'feat3d/altfeat_halfmemX0', altfeat_halfmemX0, valid=altvalid_halfmemX0, pca=True)
-                    self.summ_writer.summ_oned(f'feat3d/altvalid_halfmemX0', altvalid_halfmemX0, bev=True, norm=False)
+                feat_memX0_input = torch.cat([self.occXs[:,0:1], self.occXs[:,0:1]*self.unpXs[:,0:1]], dim=2)
+                feat_memX0_input = __p(feat_memX0_input)
+                _, altfeat_halfmemX0, _ = self.feat3dnet_slow(feat_memX0_input)
+                altvalid_halfmemX0 = torch.ones_like(altfeat_halfmemX0[:,0:1])
+                self.summ_writer.summ_feat(f'feat3d/altfeat_input', feat_memX0_input, pca=True)
+                self.summ_writer.summ_feat(f'feat3d/altfeat_output', altfeat_halfmemX0, valid=altvalid_halfmemX0, pca=True)
+                # self.summ_writer.summ_oned(f'feat3d/altvalid_halfmemX0', altvalid_halfmemX0, bev=True, norm=False)
 
         if hyp.do_occ:
-            occ_halfmemX0_sup = []
-            free_halfmemX0_sup = []
-            for b in range(self.B):
-                occ_halfmemX0_sup_, free_halfmemX0_sup_, _, _ = self.vox_utils[b].prep_occs_supervision(
-                    self.camX0s_T_camXs[b:b+1],
-                    self.xyz_camXs[b:b+1],
-                    self.Z4, self.Y4, self.X4,
-                    agg=True)
-                occ_halfmemX0_sup.append(occ_halfmemX0_sup_)
-                free_halfmemX0_sup.append(free_halfmemX0_sup_)
-            occ_halfmemX0_sup = __p(torch.stack(occ_halfmemX0_sup))
-            free_halfmemX0_sup = __p(torch.stack(free_halfmemX0_sup))
+
+            self.occ_halfmemX0_sup = __p(self.occ_halfmemX0_sup)
+            self.free_halfmemX0_sup = __p(self.free_halfmemX0_sup)
             
             # be more conservative with "free"
             weights = torch.ones(1, 1, 3, 3, 3, device=torch.device('cuda'))
-            free_halfmemX0_sup = 1.0 - (F.conv3d(1.0 - free_halfmemX0_sup, weights, padding=1)).clamp(0, 1)
+            self.free_halfmemX0_sup = 1.0 - (F.conv3d(1.0 - self.free_halfmemX0_sup, weights, padding=1)).clamp(0, 1)
             
             occ_loss, occ_memX0_pred = self.occnet(
-                utils.basic.pack_seqdim(feat_halfmemX0, self.B), 
-                occ_g=occ_halfmemX0_sup, #utils.basic.pack_seqdim(occ_halfmemX0_sup, self.B),
-                free_g=free_halfmemX0_sup, #utils.basic.pack_seqdim(free_halfmemX0_sup, self.B),
-                valid=utils.basic.pack_seqdim(valid_halfmemX0, self.B),
+                feat_halfmemX0, 
+                occ_g=self.occ_halfmemX0_sup, 
+                free_g=self.free_halfmemX0_sup, 
+                valid=valid_halfmemX0.squeeze(1),
                 summ_writer=self.summ_writer,
                 # set_name=set_name,
                 )
             total_loss += occ_loss
 
-        # if hyp.do_rgb:
-            
-        #     pixX_T_camX0s = __u(
-        #         utils.basic.matmul2(__p(self.pix_T_cams), __p(self.camXs_T_camX0s)))
-        #     unp_halfmemX0s = __u(self.vox_util.unproject_rgb_to_mem(
-        #             __p(self.rgb_camXs), self.Z2, self.Y2, self.X2, __p(pixX_T_camX0s)))
-        #     occ_halfmemX0s = self.vox_util.voxelize_xyz(self.xyz_camX0s.squeeze(0), self.Z2, self.Y2, self.X2)
-            
-        #     rgb_agg_halfmemX0 = utils.basic.reduce_masked_mean(unp_halfmemX0s, occ_halfmemX0s.unsqueeze(0), dim=1)
-        #     #occ_agg_halfmemX0 = torch.max(occ_halfmemX0s dim=1)[0]
+            # self.summ_writer.summ_occ(name, occ, reduce_axes=[3], only_return=False)
 
-        #     rgb_loss, rgb_e = self.rgbnet(
-        #         feat_halfmemX0,
-        #         rgb_g=rgb_agg_halfmemX0,
-        #         valid=valid_halfmemX0,
-        #         occ_e=F.sigmoid(occ_memX0_pred),
-        #         occ_g=occ_halfmemX0_sup,
-        #         summ_writer=self.summ_writer)
-        #     total_loss += rgb_loss
+            # print(self.occ_halfmemX0_sup.shape)
+            # occ_vis = self.summ_writer.summ_occ(f'occ/occ_g', self.occ_halfmemX0_sup.unsqueeze(1), only_return=True)
+            # plt.figure(0); plt.clf()
+            # plt.imshow(occ_vis.squeeze(0).permute(1,2,0))
+            # plt.savefig('images/test.png')
+            # print("occ_vis", occ_vis.shape)
+            # plt.figure(0); plt.clf()
+            # print(self.rgb_camXs.shape)
+            # plt.imshow(self.rgb_camXs[0,0].permute(1,2,0).cpu().numpy())
+            # plt.savefig('images/test2.png')
+            # plt.figure(0); plt.clf()
+            # print(self.rgb_camXs.shape)
+            # plt.imshow(self.rgb_camXs[0,1].permute(1,2,0).cpu().numpy())
+            # plt.savefig('images/test3.png')
+            # time.sleep(15)
             
         if hyp.do_emb3d:
-            if use_camR:
-                # compute 3D ML
-                emb3d_loss = self.emb3dnet(
-                    utils.basic.pack_seqdim(feat_halfmemR, self.B),
-                    altfeat_halfmemR,
-                    utils.basic.pack_seqdim(valid_halfmemR, self.B).round(),
-                    altvalid_halfmemR.round(),
-                    self.summ_writer)
-            else:
-                emb3d_loss = self.emb3dnet(
-                    utils.basic.pack_seqdim(feat_halfmemX0, self.B),
-                    altfeat_halfmemX0,
-                    utils.basic.pack_seqdim(valid_halfmemX0, self.B).round(),
-                    altvalid_halfmemX0.round(),
-                    self.summ_writer)
-                total_loss += emb3d_loss
+            emb3d_loss = self.emb3dnet(
+                feat_halfmemX0,
+                altfeat_halfmemX0,
+                valid_halfmemX0.round(),
+                altvalid_halfmemX0.round(),
+                self.summ_writer)
+            total_loss += emb3d_loss
 
         if hyp.do_view:
             # featX1 = self.vox_util.apply_4x4_to_vox(self.camXs_T_camX0s[:, 1], feat_halfmemX0[:,1:2]) # get features from camX1

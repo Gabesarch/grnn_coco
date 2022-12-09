@@ -136,16 +136,50 @@ def merge_rt_py(r, t):
     rt = np.concatenate([rt,bottom_row], axis=1)
     return rt
 
-def apply_4x4(RT, xyz):
-    B, N, _ = list(xyz.shape)
-    ones = torch.ones_like(xyz[:,:,0:1])
-    xyz1 = torch.cat([xyz, ones], 2)
-    xyz1_t = torch.transpose(xyz1, 1, 2)
-    # this is B x 4 x N
-    xyz2_t = torch.matmul(RT, xyz1_t)
-    xyz2 = torch.transpose(xyz2_t, 1, 2)
-    xyz2 = xyz2[:,:,:3]
-    return xyz2
+# def apply_4x4(RT, xyz):
+#     B, N, _ = list(xyz.shape)
+#     ones = torch.ones_like(xyz[:,:,0:1])
+#     xyz1 = torch.cat([xyz, ones], 2)
+#     xyz1_t = torch.transpose(xyz1, 1, 2)
+#     # this is B x 4 x N
+#     xyz2_t = torch.matmul(RT, xyz1_t)
+#     xyz2 = torch.transpose(xyz2_t, 1, 2)
+#     xyz2 = xyz2[:,:,:3]
+#     return xyz2
+
+def apply_4x4(b, a) -> torch.Tensor:
+    """
+    Batch multiply two matrices and broadcast if necessary.
+
+    Args:
+        a: torch tensor of shape (P, K) or (M, P, K)
+        b: torch tensor of shape (N, K, K)
+
+    Returns:
+        a and b broadcast multiplied. The output batch dimension is max(N, M).
+
+    To broadcast transforms across a batch dimension if M != N then
+    expect that either M = 1 or N = 1. The tensor with batch dimension 1 is
+    expanded to have shape N or M.
+    """
+    # B, N, _ = list(xyz.shape)
+    # print(a.shape)
+    # print(b.shape)
+    ones = torch.ones_like(a[:,:,0:1])
+    a = torch.cat([a, ones], 2)
+    if a.dim() == 2:
+        a = a[None]
+    if len(a) != len(b):
+        if not ((len(a) == 1) or (len(b) == 1)):
+            msg = "Expected batch dim for bmm to be equal or 1; got %r, %r"
+            raise ValueError(msg % (a.shape, b.shape))
+        if len(a) == 1:
+            a = a.expand(len(b), -1, -1)
+        if len(b) == 1:
+            b = b.expand(len(a), -1, -1)
+    a = a.bmm(b)
+    a = a[:,:,:3]
+    return a
 
 def apply_4x4_py(RT, XYZ):
     # RT is B x 4 x 4
