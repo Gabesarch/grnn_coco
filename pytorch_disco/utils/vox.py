@@ -70,11 +70,11 @@ class Vox_util(object):
         self.YMAX += y_centroid
         self.ZMIN += z_centroid
         self.ZMAX += z_centroid
-        # print('bounds for this iter:',
-        #       'X = %.2f to %.2f' % (self.XMIN, self.XMAX), 
-        #       'Y = %.2f to %.2f' % (self.YMIN, self.YMAX), 
-        #       'Z = %.2f to %.2f' % (self.ZMIN, self.ZMAX), 
-        # )
+        print('bounds for this iter:',
+              'X = %.2f to %.2f' % (self.XMIN, self.XMAX), 
+              'Y = %.2f to %.2f' % (self.YMIN, self.YMAX), 
+              'Z = %.2f to %.2f' % (self.ZMIN, self.ZMAX), 
+        )
 
         self.default_vox_size_X = (self.XMAX-self.XMIN)/float(X)
         self.default_vox_size_Y = (self.YMAX-self.YMIN)/float(Y)
@@ -796,7 +796,7 @@ class Vox_util(object):
 
         camRs_T_camXs_ = __p(camRs_T_camXs)
         xyz_camXs_ = __p(xyz_camXs)
-        xyz_camRs_ = utils.geom.apply_4x4(camRs_T_camXs_, xyz_camXs_)
+        xyz_camRs_ = utils.geom.apply_4x4_bmm(camRs_T_camXs_, xyz_camXs_)
         occXs_ = self.voxelize_xyz(xyz_camXs_, Z, Y, X)
         occRs_ = self.voxelize_xyz(xyz_camRs_, Z, Y, X)
 

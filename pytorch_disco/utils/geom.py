@@ -136,18 +136,18 @@ def merge_rt_py(r, t):
     rt = np.concatenate([rt,bottom_row], axis=1)
     return rt
 
-# def apply_4x4(RT, xyz):
-#     B, N, _ = list(xyz.shape)
-#     ones = torch.ones_like(xyz[:,:,0:1])
-#     xyz1 = torch.cat([xyz, ones], 2)
-#     xyz1_t = torch.transpose(xyz1, 1, 2)
-#     # this is B x 4 x N
-#     xyz2_t = torch.matmul(RT, xyz1_t)
-#     xyz2 = torch.transpose(xyz2_t, 1, 2)
-#     xyz2 = xyz2[:,:,:3]
-#     return xyz2
+def apply_4x4(RT, xyz):
+    B, N, _ = list(xyz.shape)
+    ones = torch.ones_like(xyz[:,:,0:1])
+    xyz1 = torch.cat([xyz, ones], 2)
+    xyz1_t = torch.transpose(xyz1, 1, 2)
+    # this is B x 4 x N
+    xyz2_t = torch.matmul(RT, xyz1_t)
+    xyz2 = torch.transpose(xyz2_t, 1, 2)
+    xyz2 = xyz2[:,:,:3]
+    return xyz2
 
-def apply_4x4(b, a) -> torch.Tensor:
+def apply_4x4_bmm(b, a) -> torch.Tensor:
     """
     Batch multiply two matrices and broadcast if necessary.
 
