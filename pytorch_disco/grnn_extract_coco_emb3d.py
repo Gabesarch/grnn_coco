@@ -1,9 +1,5 @@
 import os
-# script = """
 MODE="CARLA_MOC"
-# export MODE
-# """
-# os.system("bash -c '%s'" % script)
 os.environ["MODE"] = MODE
 os.environ["exp_name"] = 'trainer_carla_replica_feat3d_enc3d_occ_view_vox'
 os.environ["run_name"] = 'grnn'
@@ -20,36 +16,22 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 from model_base import Model
-# from nets.featnet2D import FeatNet2D
-# from nets.feat3dnet import Feat3dNet
-# from nets.emb3dnet import Emb3dNet
-# from nets.occnet import OccNet
-# # from nets.mocnet import MocNet
-# # from nets.viewnet import ViewNet
-# from nets.rgbnet import RgbNet
-# from nets.feat3dnet import Feat3dNet
-
 from nets.feat3dnet import Feat3dNet
 # from nets.emb3dnet import Emb3dNet
 from nets.occnet import OccNet
 from nets.viewnet import ViewNet
+
+import sys
+sys.path.append("/home/gsarch/repo/nsd/")
+from util.util import dimensionality_reduction_feats
+from sklearn.model_selection import train_test_split
+from featureprep.feature_prep import extract_feature_with_image_order
 
 
 import cv2
 
 from tensorboardX import SummaryWriter
 import torch.nn.functional as F
-
-# import utils_samp
-# import utils_geom
-# import utils_improc
-# import utils_basic
-# import utils_eval
-# # import utils_py
-# import utils_misc
-# # import utils_track
-# import utils_vox_other as utils_vox
-
 import utils.samp
 import utils.geom
 import utils.improc
@@ -71,27 +53,12 @@ from pycocotools.coco import COCO
 
 from backend import saverloader, inputs
 
-
-import sys
-# sys.path.append("XTConsistency")
-# from modules.unet import UNet, UNetReshade
-
-
-# np.set_printoptions(precision=2)
-# np.random.seed(0)
-
 import ipdb
 st = ipdb.set_trace
-
-# do_feat3d = True
-
-# XTC_init = '/home/gsarch/repo/pytorch_disco/saved_checkpoints/XTC_checkpoints/rgb2depth_consistency_wimagenet.pth'
 coco_images_path = '/lab_data/tarrlab/common/datasets/NSD_images'
 
-# layer = 'Res3dBlock8'
-
-# set_name = 'test00'
 layers = [
+    'occ_e',
     'x0',
     'x1',
     'x2',
@@ -103,26 +70,32 @@ layers = [
     'x8',
     'x9',
     'feat_norm',
-    'occ_e',
 ]
 
 set_name = 'enc3d_emb3d_07'
+set_name = 'enc3d_emb3d_omnidatafull_bounds_00'
+set_name = 'enc3d_emb3d_omnidatafull_nobounds_00'
 # set_name = 'GRNN_test02'
+# set_name = 'omnidata_test'
+set_name = 'enc3d_emb3d_omnidatafull_bounds_01'
 print(set_name)
 
 checkpoint_dir='checkpoints/' + set_name
-log_dir='logs_carla_moc'
+log_dir='logs_omnidata_moc'
 
 # do_viewnet = True
-flip_layer_order = False
-save_feats = True
+flip_layer_order = True
+save_full_features = False
+save_subject_pca_features = True
 plot_classes = False
 only_process_stim_ids = False
 reduce_channels = False
-log_freq = 10000 # frequency for logging tensorboard
-subj = 1 # subject number - supports: 1, 2, 7
+log_freq = 500 # frequency for logging tensorboard
+subjects = [1,2,3,4,5,6,7,8] # subjects to save pca for if save_subject_pca_features=True
 pretrain = True
 # print("SUBJECT:", subj)
+
+stim_dir='/user_data/yuanw3/project_outputs/NSD/output'
 
 if flip_layer_order:
     layers = list(np.flip(np.array(layers)))
@@ -142,6 +115,15 @@ hyp.occ_init = '01_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_ns_enc3d_e
 # if do_viewnet:
 #     hyp.view_init = '02_m144x144x144_p128x128_1e-3_F32_Oc_c1_s1_V_d32_c1_train_ns_grnn00'
 
+hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_00'
+hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_00'
+
+hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_nobounds_01'
+hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_nobounds_01'
+
+hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_02'
+hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_02'
+
 # output_dir = f'/lab_data/tarrlab/gsarch/encoding_model/{set_name}_subj={subj}_pl={pool_len}_nm={num_maxpool}'
 # output_dir = '/lab_data/tarrlab/gsarch/encoding_model/grnn_feats_init_32x18x18x18' #/subj%s' % (subj)
 # output_dir = f'/lab_data/tarrlab/gsarch/encoding_model/{set_name}'
@@ -149,32 +131,6 @@ output_dir = f'/user_data/gsarch/encoding_model/{set_name}'
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
 print("output_dir: ", output_dir)
-
-# https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/coco.py
-
-# class ImageFolderWithPaths(datasets.ImageFolder):
-#     """Custom dataset that includes image file paths. Extends
-#     torchvision.datasets.ImageFolder
-#     """
-#     def __init__(self, coco_images_path, transform):
-#         super(ImageFolderWithPaths, self).__init__(coco_images_path, transform=transform)
-#         if only_process_stim_ids:
-#             image_ids = [int(self.imgs[i][0].split('/')[-1].split('.')[0]) for i in range(len(self.imgs))]
-#             idxes = [image_ids.index(cid) for cid in stim_list]
-#             self.imgs = [self.imgs[idx] for idx in idxes]
-
-#     # override the __getitem__ method. this is the method that dataloader calls
-#     def __getitem__(self, index):
-#         # this is what ImageFolder normally returns 
-#         original_tuple = super(ImageFolderWithPaths, self).__getitem__(index)
-#         # the image file path
-#         path = self.imgs[index][0]
-#         path = path.split('/')[-1].split('.')[0]
-#         file_id = int(path)
-
-#         # make a new tuple that includes original and the path
-#         tuple_with_path = (original_tuple + (file_id,))
-#         return tuple_with_path
 
 class GRNN(nn.Module):
     def __init__(self):
@@ -373,14 +329,26 @@ class COCO_GRNN(nn.Module):
             p.requires_grad = False
         self.grnn.eval()
 
+        model_type = "DPT_Large"     # MiDaS v3 - Large     (highest accuracy, slowest inference speed)
+        #model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
+        #model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
+
+        self.midas = torch.hub.load("intel-isl/MiDaS", model_type, pretrained=True).eval()
+
         # midas depth estimation
-        self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS") #, _use_new_zipfile_serialization=True)
+        # self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS") #, _use_new_zipfile_serialization=True)
         # device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.midas.cuda()
         self.midas.eval()
 
         midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-        self.transform = midas_transforms.default_transform
+        if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
+            self.transform = midas_transforms.dpt_transform
+        else:
+            self.transform = midas_transforms.small_transform
+
+        # midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        # self.transform = midas_transforms.default_transform
 
 
 
@@ -444,7 +412,7 @@ class COCO_GRNN(nn.Module):
                     if file_ids not in stim_list: 
                         continue
 
-                print('Layer',layer,'Images processed:', idx)
+                print('set name', set_name, 'Layer',layer,'Images processed:', idx)
 
                 self.summ_writer = utils.improc.Summ_writer(
                     writer=self.writer,
@@ -513,7 +481,7 @@ class COCO_GRNN(nn.Module):
                 num_spatial = len(feat_memX.shape[2:])
                 feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
                 
-                if save_feats:
+                if save_subject_pca_features or save_full_features:
                     # 3d pool
                     feat_size_thresh = 200000
 
@@ -556,6 +524,41 @@ class COCO_GRNN(nn.Module):
                 if only_process_stim_ids:
                     if idx == 10000:
                         break
+
+            if save_subject_pca_features:
+                print("Saving features")
+
+                b = feats.shape[0]
+                feats = np.reshape(feats, (b, -1))
+
+                for subj in subjects:
+
+                    print(f"Saving layer {layer}, subject {subj}")
+
+                    pca_train_file_path =  f"{output_dir}/{layer}_subj{subj}_train_pca.npy"
+                    pca_test_file_path =  f"{output_dir}/{layer}_subj{subj}_test_pca.npy"
+                    pca_fit_path = f"{output_dir}/{layer}_subj{subj}_pca_fit.p" # path to pca model
+
+                    if os.path.isfile(pca_train_file_path) and os.path.isfile(pca_test_file_path):
+                        print(f"{pca_train_file_path} exists. delete old file to regenerate.")
+                        continue
+
+                    stimulus_list = np.load(
+                        "%s/coco_ID_of_repeats_subj%02d.npy" % (stim_dir, subj)
+                    )
+
+                    feature_mat = extract_feature_with_image_order(
+                        stimulus_list, feats, file_order, 
+                    )
+
+                    # split train and test set
+                    X_train, X_test = train_test_split(
+                        feature_mat, test_size=0.15, random_state=42
+                    )
+
+                    _,_ = dimensionality_reduction_feats(X_train, X_test, layer, pca_train_file_path, pca_test_file_path, pca_fit_path, method='pca', override_existing_pca=True)
+
+                    del feature_mat, X_train, X_test
             
             # feats = np.concatenate(feats, axis=0)
             # file_order = np.concatenate(file_order, axis=0)
@@ -573,7 +576,7 @@ class COCO_GRNN(nn.Module):
                 plt.yticks(np.arange(0.0,1.0,0.05))
                 plt.savefig(output_dir + '/variance_explained.png')
 
-            if save_feats:
+            if save_full_features:
                 np.save(f'{output_dir}/{layer}.npy', feats)
                 np.save(f'{output_dir}/file_order.npy', file_order)
 

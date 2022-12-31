@@ -42,9 +42,31 @@ exps['builder'] = [
     'log1',
 ]
 
+# feat3d + occ
+exps['trainer_omnidata_feat3d_enc3d_occ'] = [
+    'omnidata_moc', # mode
+    'carla_and_replica_train',
+    'carla_and_replica_val',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    '500k_iters',
+    'lr4',
+    'B2',
+    'train_feat3d_enc3d',
+    'train_occ',
+    # 'train_emb3d',
+    # 'fit_vox',
+    # 'train_view',
+    # 'train_rgb',
+    'log500',
+    # 'vallog100',
+    # 'log1',
+    'snap5k', 
+]
 
-######### exps with fitting vox
-# emb only
+# feat3d + occ + emb
 exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'omnidata_moc', # mode
     'carla_and_replica_train',
@@ -55,120 +77,17 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     # 'pretrained_occ',
     '500k_iters',
     'lr4',
-    'B1',
+    'B2',
     'train_feat3d_enc3d',
     'train_occ',
     'train_emb3d',
-    'fit_vox',
+    # 'fit_vox',
     # 'train_view',
     # 'train_rgb',
     # 'log500',
     # 'vallog100',
-    'log1',
-    'snap5k', 
-]
-
-# view only
-exps['trainer_omnidata_feat3d_enc3d_occ_view_vox'] = [
-    'omnidata_moc', # mode
-    'carla_and_replica_train',
-    'carla_and_replica_val',
-    # 'bounds_train_replica_carla',
-    '8-8-8_bounds_train',
-    # 'pretrained_feat3d',
-    '400k_iters',
-    'lr4',
-    'B1',
-    'pretrained_feat3d',
-    'pretrained_view',
-    'pretrained_occ',
-    'train_feat3d_enc3d',
-    'train_occ',
-    # 'train_emb3d',
-    'train_view',
-    'fit_vox',
-    # 'train_rgb',
-    'log500',
-    # 'vallog100',
-    # 'log1',
-    'snap10k', 
-]
-
-# emb + view
-exps['trainer_omnidata_feat3d_enc3d_occ_emb3d_view_vox'] = [
-    'omnidata_moc', # mode
-    'carla_and_replica_train',
-    'carla_and_replica_val',
-    # 'bounds_train_replica_carla',
-    '8-8-8_bounds_train',
-    # 'pretrained_feat3d',
-    '400k_iters',
-    'lr4',
-    'B1',
-    'train_feat3d_enc3d',
-    'train_occ',
-    'train_emb3d', # scale down to around view loss range
-    'train_view',
-    'fit_vox',
-    # 'train_rgb',
-    'log500',
-    # 'vallog100',
-    # 'log1',
-    'snap10k', 
-]
-
-# occ only
-exps['trainer_omnidata_feat3d_enc3d_occ_vox'] = [
-    'omnidata_moc', # mode
-    'carla_and_replica_train',
-    'carla_and_replica_val',
-    # 'bounds_train_replica_carla',
-    '8-8-8_bounds_train',
-    # 'pretrained_feat3d',
-    '400k_iters',
-    'lr4',
-    'B1',
-    # 'pretrained_feat3d',
-    # 'pretrained_view',
-    # 'pretrained_occ',
-    'train_feat3d_enc3d',
-    'train_occ',
-    # 'train_emb3d',
-    # 'train_view',
-    'fit_vox',
-    # 'train_rgb',
-    'log500',
-    # 'vallog100',
-    # 'log1',
-    'snap10k', 
-]
-
-###############
-# evaluate train or val or test
-exps['trainer_omnidata_feat3d_enc3d_occ_view_vox_VAL'] = [
-    'omnidata_moc', # mode
-    # 'carla_and_replica_val',
-    'carla_and_replica_train',
-    # 'bounds_train_replica_carla',
-    '8-8-8_bounds_train',
-    # 'pretrained_feat3d',
-    '1000_iters',
-    'lr4',
-    'B1',
-    'pretrained_feat3d',
-    'pretrained_view',
-    'pretrained_occ',
-    'train_feat3d_enc3d',
-    'train_occ',
-    # 'train_emb3d',
-    'train_view',
-    'fit_vox',
-    'start1',
-    # 'vallog100',
-    # 'train_rgb',
-    'log1',
-    'no_backprop',
-    #'log1',
+    'log10',
+    'use_bounds',
     'snap5k', 
 ]
 
@@ -201,6 +120,7 @@ groups['train_emb3d'] = [
     # 'emb3d_num_samples = 2',
     'emb3d_mindist = 16.0',
     'emb3d_num_samples = 2',
+    # 'emb3d_ce_coeff = 1.0',
     'emb3d_ce_coeff = 1.0',
 ]
 # groups['train_emb3d_reduced_coeff'] = [
@@ -216,6 +136,10 @@ groups['train_emb3d'] = [
 
 groups['resume_train'] = [
     'total_init = "03_m144x144x144_2e-5_O_c1_s.1_ns_carl_rep_lesc02"',
+]
+
+groups['use_bounds'] = [
+    'use_bounds = True',
 ]
 
 

@@ -330,7 +330,7 @@ def resample3d(vox, xyz, binary_feat=False):
     B, C, Z, Y, X = list(vox.shape)
     xyz = normalize_gridcloud3d(xyz, Z, Y, X)
     xyz = torch.reshape(xyz, [B, Z, Y, X, 3])
-    vox = F.grid_sample(vox, xyz)
+    vox = F.grid_sample(vox, xyz, align_corners=False)
     if binary_feat:
         vox = vox.round()
     return vox
@@ -341,7 +341,7 @@ def resample2d(im, xy, binary_feat=False):
     B, C, Y, X = list(im.shape)
     xy = normalize_gridcloud2d(xy, Y, X)
     xy = torch.reshape(xy, [B, Y, X, 2])
-    im = F.grid_sample(im, xy)
+    im = F.grid_sample(im, xy, align_corners=False)
     if binary_feat:
         im = im.round()
     return im
@@ -369,7 +369,7 @@ def crop_and_resize_box2d(im, box2d, Y, X):
     # now the range is (-1,1)
 
     xy = torch.stack([grid_x, grid_y], dim=3)
-    samp = F.grid_sample(im, xy)
+    samp = F.grid_sample(im, xy, align_corners=False)
     return samp
     
         
@@ -390,7 +390,7 @@ def sample3d(vox, xyz, D, H, W, mode='bilinear'):
         # pytorch's native func
         xyz = normalize_gridcloud3d(xyz, Z, Y, X)
         xyz = torch.reshape(xyz, [B, D, H, W, 3])
-        samp = F.grid_sample(vox, xyz, mode=mode)
+        samp = F.grid_sample(vox, xyz, mode=mode, align_corners=False)
     
     samp = torch.reshape(samp, [B, E, D, H, W])
     return samp
@@ -418,7 +418,7 @@ def cuda_grid_sample(im, grid, use_native=False):
         # return grid_interpolate3d(im, grid)
     else:
         # assert(False) # need to edit this to also return inbounds
-        raw_out = non_cuda_grid_sample(im, grid)
+        raw_out = non_cuda_grid_sample(im, grid, align_corners=False)
     B,C,D,H,W = list(im.shape)
     inbounds = torch.cat([grid>=-0.5,
                           grid<=torch.tensor([D-0.5,H-0.5,W-0.5])],

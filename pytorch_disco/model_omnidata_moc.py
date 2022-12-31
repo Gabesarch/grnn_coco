@@ -27,14 +27,16 @@ import os, sys; sys.path.append(os.path.expanduser(os.getcwd()))
 from dataloader.pytorch_lightning_datamodule import OmnidataDataModule
 from dataloader.pytorch3d_utils import *
 from dataloader.viz_utils import *
-os.environ['OMNIDATA_PATH'] = '/lab_data/tarrlab/gsarch/omnidata/omnidata_starter_dataset'
+os.environ['OMNIDATA_PATH'] = '/lab_data/tarrlab/scratch/gsarch/omnidata/omnidata_starter_dataset2'
 os.environ['OMNIDATA_CACHE_PATH'] = '/lab_data/tarrlab/scratch/gsarch/omnidata/omnidata_starter_dataset/.cache'
 
 # from backend import inputs3 as inputs
 
 from model_base import Model
 # from nets.featnet2D import FeatNet2D
-from nets.feat3dnet import Feat3dNet
+# from nets.feat3dnet import Feat3dNet
+from nets.featnet import FeatNet as Feat3dNet
+
 from nets.emb3dnet import Emb3dNet
 from nets.occnet import OccNet
 # from nets.mocnet import MocNet
@@ -62,6 +64,10 @@ from tqdm import tqdm
 import ipdb
 st = ipdb.set_trace
 
+# fix the seed for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
+
 class OMNIDATA_MOC(Model):
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     def initialize_model(self):
@@ -84,24 +90,30 @@ class OMNIDATA_MOC(Model):
 
         ):
 
+        print("BATCH SIZE:", hyp.batch_sizes["train"])
+
         dm = OmnidataDataModule(
             tasks = ['point_info', 'rgb', 'depth_euclidean', 'mask_valid'],
             train_datasets_to_options = dict(
-                    # TaskonomyDataset = dict(data_amount='tiny', data_path='/datasets/omnidata/ta/'),
-                    ReplicaDataset   = dict()
+                    HypersimDataset   = dict(),
+                    TaskonomyDataset = dict(),
+                    ReplicaDataset   = dict(),
+                    GSOReplicaDataset   = dict(),
                 ),
                 eval_datasets_to_options  = dict(
-                    # HypersimDataset   = dict(cooccurrence_method='FRAGMENTS')
-                    ReplicaDataset   = dict()
-                    # GSOReplicaDataset   = dict()
-                    # TaskonomyDataset  = dict(data_amount='tiny')
+                    # HypersimDataset   = dict(cooccurrence_method='FRAGMENTS'),
+                    ReplicaDataset   = dict(),
+                    GSOReplicaDataset   = dict(),
+                    # TaskonomyDataset  = dict(),
                 ),
                 shared_options = dict(
                     data_amount  = 'debug',
+                    # data_amount  = 'tiny',
+                    # data_amount  = 'fullplus',
                     data_path    = os.environ['OMNIDATA_PATH'],
                     cache_dir    = os.environ['OMNIDATA_CACHE_PATH'],
                     image_size   = 512,
-                    multiview_sampling_method = 'FILENAME', # Works for Taskonomy, Replica
+                    multiview_sampling_method = 'CENTER_VISIBLE', #'FILENAME', # Works for Taskonomy, Replica
                     n_workers    = 4,
                     # force_refresh_tmp = True,
                     num_positive = hyp.S,
@@ -115,6 +127,9 @@ class OMNIDATA_MOC(Model):
 
         dl_val = dm.val_dataloader()[0]
         dl_train = dm.train_dataloader()
+
+        print(f"Length train: {len(dl_train)}")
+        print(f"Length val: {len(dl_val)}")
 
         dl = {}
         dl["train"] = dl_train
@@ -142,16 +157,16 @@ class OMNIDATA_MOC(Model):
 
         all_inputs = self.get_dataloader()
         
-        # set val to set 1
-        hyp.valset = hyp.valset1
-        if hyp.valset1:
-            hyp.name = "%s_%s" % (hyp.name, hyp.valset1)
-            hyp.sets_to_run['val'] = True
-        else:
-            hyp.sets_to_run['val'] = False
-        hyp.valset_path = "%s/%s.txt" % (hyp.dataset_list_dir1, hyp.valset1)
-        hyp.data_paths['val'] = hyp.valset_path
-        hyp.data_formats['val'] = hyp.valset_format
+        # # set val to set 1
+        # hyp.valset = hyp.valset1
+        # if hyp.valset1:
+        #     hyp.name = "%s_%s" % (hyp.name, hyp.valset1)
+        #     hyp.sets_to_run['val'] = True
+        # else:
+        #     hyp.sets_to_run['val'] = False
+        # hyp.valset_path = "%s/%s.txt" % (hyp.dataset_list_dir1, hyp.valset1)
+        # hyp.data_paths['val'] = hyp.valset_path
+        # hyp.data_formats['val'] = hyp.valset_format
 
 
         set_nums = []
@@ -168,6 +183,8 @@ class OMNIDATA_MOC(Model):
         set_loaders = []
         set_loaders2 = []
         set_loaders3 = []
+
+        print(hyp.set_names)
 
         for set_name in hyp.set_names:
             if hyp.sets_to_run[set_name]:
@@ -325,17 +342,18 @@ class OMNIDATA_MOC(Model):
                         self.model.eval()
                         with torch.no_grad():
                             loss, results, returned_early = self.model(feed_cuda)
-                    loss_py = loss.cpu().item()
+                    # loss_py = loss.cpu().item()
 
                     if ((not returned_early) and 
                         (set_do_backprop) and 
-                        (hyp.lr > 0)):
+                        (hyp.lr > 0) and
+                        (loss is not None)):
                         
                         self.optimizer.zero_grad()
                         loss.backward()
                         self.optimizer.step()
 
-                    metric_logger.update(loss=loss)
+                        metric_logger.update(loss=loss)
 
                     if hyp.do_emb3d:
                         def update_slow_network(slow_net, fast_net, beta=0.999):
@@ -493,36 +511,48 @@ class CarlaMocModel(nn.Module):
             field_list = [getattr(p, field + "_list")() for p in pcs_full]
             field_list = [f[0] for f in field_list]
 
-            xyz_maxs = torch.max(field_list[0], dim=0)[0]
-            xyz_mins = torch.min(field_list[0], dim=0)[0]
+            if len(field_list[0])==0:
+                all_ok = False
+                return all_ok
+
+            xyz_argmax = torch.argmax(torch.abs(field_list[0]))
+            xyz_max = abs(field_list[0].flatten()[xyz_argmax])
             xyz_means = torch.median(field_list[0], dim=0).values.cpu().numpy()
 
             pix_T_cams = cam_params['proj_K'].squeeze(1)
             self.pix_T_cams.append(pix_T_cams)
             
-            pixX0_T_camRs = utils.basic.matmul2(pix_T_cams, camXs_T_camRs)
+            # pixX0_T_camRs = utils.basic.matmul2(pix_T_cams, camXs_T_camRs)
 
-            scene_centroid_x_noise = np.random.normal(0, 0.2) #+ offset_x
-            scene_centroid_y_noise = np.random.normal(0, 0.2) #+ offset_y
-            scene_centroid_z_noise = np.random.normal(0, 0.2) #+ offset_z
+            scene_centroid_x_noise = np.random.normal(0, 0.5) #+ offset_x
+            scene_centroid_y_noise = np.random.normal(0, 0.5) #+ offset_y
+            scene_centroid_z_noise = np.random.normal(0, 0.5) #+ offset_z
 
-            xyz_max = int(torch.clip(max(xyz_maxs), max=20.0).cpu().numpy()) / 2.
+            xyz_max = float(torch.clip(xyz_max, max=20.0).cpu().numpy() / 2.)
             scene_centroid_B = torch.tensor([scene_centroid_x_noise+xyz_means[0], scene_centroid_y_noise+xyz_means[1], xyz_means[2]+scene_centroid_z_noise]).cuda().squeeze(0).reshape(1,3)
-            # bounds_B = torch.tensor([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
 
-            # self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=True))
-            self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, assert_cube=True))
+            if hyp.use_bounds:
+                bounds_B = torch.tensor([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
+                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=True))
+            else:
+                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, assert_cube=True))
             occXs_ = []
             unpXs_ = []
             occ_halfmemX0_sup = []
             free_halfmemX0_sup = []
             
             for s in range(self.S):
-                occXs = self.vox_utils[-1].voxelize_xyz(field_list[s].unsqueeze(0), self.Z, self.Y, self.X)
+                occXs, vox_inds = self.vox_utils[-1].voxelize_xyz(field_list[s].unsqueeze(0), self.Z, self.Y, self.X, return_vox_ind=True)
                 occXs_.append(occXs)
+
+                # unproject rgb into voxels
+                rgb_masked = self.rgb_camXs[batch_idx, s].reshape(3,-1)[:,mask_valid[s].reshape(-1)]
+                unpXs = torch.zeros([3, 1*self.Z*self.Y*self.X], device=torch.device('cuda')).float()
+                unpXs[:,vox_inds.long()] = rgb_masked
+                unpXs = unpXs.reshape(3,self.Z,self.Y,self.X)
                 
-                unpXs = self.vox_utils[-1].unproject_rgb_to_mem(
-                    self.rgb_camXs[batch_idx, s].unsqueeze(0), self.Z, self.Y, self.X, pixX0_T_camRs[s].unsqueeze(0))
+                # unpXs = self.vox_utils[-1].unproject_rgb_to_mem_bmm(
+                #     self.rgb_camXs[batch_idx, s].unsqueeze(0), self.Z, self.Y, self.X, pixX0_T_camRs[s].unsqueeze(0))
                 unpXs_.append(unpXs)
 
             occ_halfmemX0_sup_, free_halfmemX0_sup_, _, _ = self.vox_utils[-1].prep_occs_supervision(
@@ -531,6 +561,7 @@ class CarlaMocModel(nn.Module):
                 self.Z4, self.Y4, self.X4,
                 agg=True
                 )
+            free_halfmemX0_sup_ = 1. - occ_halfmemX0_sup_
 
             self.occXs.append(torch.stack(occXs_))
             self.unpXs.append(torch.stack(unpXs_))
@@ -541,25 +572,22 @@ class CarlaMocModel(nn.Module):
             if batch_idx==0 and self.summ_writer.save_this:
 
                 xyz_camRs = utils.geom.apply_4x4_bmm(camRs_T_camXs, xyz_camXs)
-                print(xyz_camRs.shape)
-                print(xyz_camRs[0])
-                # print(mask_valid.shape)
-                # xyz_camRs = [pts[keep.reshape(-1)]   for pts, keep in zip(xyz_camRs, mask_valid)]
                 occXs_ = self.vox_utils[-1].voxelize_xyz(xyz_camXs, self.Z4, self.Y4, self.X4)
                 occRs_ = self.vox_utils[-1].voxelize_xyz(xyz_camRs, self.Z4, self.Y4, self.X4)
                 freeXs_ = self.vox_utils[-1].get_freespace(xyz_camXs, occXs_)
                 freeRs_ = self.vox_utils[-1].apply_4x4_to_vox(camRs_T_camXs, freeXs_)
-                occXs = __u(occXs_)
-                occRs = __u(occRs_)
-                freeXs = __u(freeXs_)
-                freeRs = __u(freeRs_)
+                occXs = occXs_.unsqueeze(0)
+                occRs = occRs_.unsqueeze(0)
+                freeXs = freeXs_.unsqueeze(0)
+                freeRs = freeRs_.unsqueeze(0)
 
-                self.summ_writer.summ_occ('occ/occX0s_input', self.occXs[-1][0].squeeze().unsqueeze(0).unsqueeze(0), reduce_axes=[3])
-                self.summ_writer.summ_occ('occ/occX0_input', occXs[:,0], reduce_axes=[3])
-                self.summ_writer.summ_occ('occ/occX1_input', occXs[:,1], reduce_axes=[3])
-                self.summ_writer.summ_occ('occ/occR0_input', occRs[:,0], reduce_axes=[3])
-                self.summ_writer.summ_occ('occ/occR1_input', occRs[:,1], reduce_axes=[3])
-                self.summ_writer.summ_occ('occ/occR_input_combined', torch.cat(occRs.unbind(1), dim=3), reduce_axes=[3])
+                with torch.no_grad():
+                    self.summ_writer.summ_occ('occ/occX0s_input', self.occXs[-1][0].squeeze().unsqueeze(0).unsqueeze(0), reduce_axes=[3])
+                    self.summ_writer.summ_occ('occ/occX0_input', occXs[:,0], reduce_axes=[3])
+                    self.summ_writer.summ_occ('occ/occX1_input', occXs[:,1], reduce_axes=[3])
+                    self.summ_writer.summ_occ('occ/occR0_input', occRs[:,0], reduce_axes=[3])
+                    self.summ_writer.summ_occ('occ/occR1_input', occRs[:,1], reduce_axes=[3])
+                    self.summ_writer.summ_occ('occ/occR_input_combined', torch.cat(occRs.unbind(1), dim=3), reduce_axes=[3])
 
         self.occXs = torch.stack(self.occXs).squeeze(2)
         self.unpXs = torch.stack(self.unpXs).squeeze(2)
@@ -573,22 +601,15 @@ class CarlaMocModel(nn.Module):
     #     if function=="get_inbounds":
 
     def run_train(self, feed):
-        use_camR = False
         results = dict()
 
         global_step = feed['global_step']
         set_name = feed['set_name']
-        # print("SET_NAME:", set_name)
         total_loss = torch.tensor(0.0).cuda()
         # st()
 
         __p = lambda x: utils.basic.pack_seqdim(x, self.B)
         __u = lambda x: utils.basic.unpack_seqdim(x, self.B)
-
-        # since we are using multiview data, all Rs are aligned
-        # we'll encode X0 with the fast net, then warp to R
-        # we'll use the X0 version for occ loss, to get max labels
-        # we'll encode X1/R1 with slow net, and use this for emb loss
 
         self.summ_writer.summ_rgbs(f'inputs/rgbs', self.rgb_camXs.unbind(1))
         self.summ_writer.summ_unps('inputs/unps', self.unpXs.unbind(1), self.occXs.unbind(1))
@@ -598,7 +619,7 @@ class CarlaMocModel(nn.Module):
 
             featX0_input = torch.cat([self.occXs[:,1:2], self.occXs[:,1:2]*self.unpXs[:,1:2]], dim=2)
             featX0_input_ = __p(featX0_input)
-            feat3d_loss, feat_halfmemX0, _ = self.feat3dnet(
+            feat_halfmemX0, feat3d_loss = self.feat3dnet(
                 featX0_input_,
                 summ_writer=self.summ_writer,
                 # set_name=set_name,
@@ -610,7 +631,6 @@ class CarlaMocModel(nn.Module):
             # self.summ_writer.summ_feat(f'feat3d/feat_halfmemX0', feat_halfmemX0[0], valid=valid_halfmemX0[0], pca=True)
 
             if hyp.do_emb3d:
-
                 feat_memX0_input = torch.cat([self.occXs[:,0:1], self.occXs[:,0:1]*self.unpXs[:,0:1]], dim=2)
                 feat_memX0_input = __p(feat_memX0_input)
                 _, altfeat_halfmemX0, _ = self.feat3dnet_slow(feat_memX0_input)
@@ -621,8 +641,10 @@ class CarlaMocModel(nn.Module):
 
         if hyp.do_occ:
 
-            self.occ_halfmemX0_sup = __p(self.occ_halfmemX0_sup)
-            self.free_halfmemX0_sup = __p(self.free_halfmemX0_sup)
+            # self.occ_halfmemX0_sup = __p(self.occ_halfmemX0_sup)
+            # self.free_halfmemX0_sup = __p(self.free_halfmemX0_sup)
+            # print(self.occ_halfmemX0_sup.shape)
+            # print(self.free_halfmemX0_sup.shape)
             
             # be more conservative with "free"
             weights = torch.ones(1, 1, 3, 3, 3, device=torch.device('cuda'))
@@ -694,7 +716,7 @@ class CarlaMocModel(nn.Module):
                 )      
             # print(rgb_e.shape)              
             total_loss += view_loss
-
+        
         self.summ_writer.summ_scalar(f'loss', total_loss.cpu().item())
 
         return total_loss, results, False
@@ -715,8 +737,8 @@ class CarlaMocModel(nn.Module):
             else:
                 return False # no test here yet
         else:
-            total_loss = torch.tensor(0.0).cuda()
-            return total_loss, None, False
+            # total_loss = torch.tensor(0.0).cuda()
+            return None, None, False
         
         # # arriving at this line is bad
         # print('weird set_name:', set_name)

@@ -148,7 +148,8 @@ class Emb3dNet(nn.Module):
 
         l2_loss_im = torch.mean(utils.basic.sql2_on_axis(emb_e-emb_g, 1, keepdim=True), dim=3)
         if summ_writer is not None:
-            summ_writer.summ_oned('emb3d/emb3d_l2_loss', l2_loss_im)
-            summ_writer.summ_feats('emb3d/embs', [emb_e, emb_g], pca=True)
+            with torch.no_grad():
+                summ_writer.summ_oned('emb3d/emb3d_l2_loss', l2_loss_im)
+                summ_writer.summ_feats('emb3d/embs', [emb_e, emb_g], pca=True)
         return total_loss
 

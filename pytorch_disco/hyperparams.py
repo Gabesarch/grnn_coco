@@ -618,6 +618,7 @@ root_dataset = ""
 dataset_format = "tf" #can be tf or npz
 
 # mode selection
+use_bounds=False
 do_zoom = False
 do_carla_det = False
 do_carla_mot = False
@@ -696,7 +697,7 @@ set_nums['train'] = 0
 set_nums['val'] = 1
 set_nums['test'] = 2
 
-set_names = ['train', 'val', 'test']
+set_names = ['train', 'val']
 
 log_freqs = {}
 log_freqs['train'] = log_freq_train

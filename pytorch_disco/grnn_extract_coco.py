@@ -112,7 +112,7 @@ set_name = 'grnn_feats_all_avgpool_init' # pool len=2 num=2 avgpool
 
 # set_name = 'grnn_conv3' # pool len=2 num=2 avgpool
 
-# set_name = 'test00'
+set_name = 'test00'
 layer_map = {
     'conv1':0, 
     'conv2':1, 

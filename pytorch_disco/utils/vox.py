@@ -70,11 +70,11 @@ class Vox_util(object):
         self.YMAX += y_centroid
         self.ZMIN += z_centroid
         self.ZMAX += z_centroid
-        print('bounds for this iter:',
-              'X = %.2f to %.2f' % (self.XMIN, self.XMAX), 
-              'Y = %.2f to %.2f' % (self.YMIN, self.YMAX), 
-              'Z = %.2f to %.2f' % (self.ZMIN, self.ZMAX), 
-        )
+        # print('bounds for this iter:',
+        #       'X = %.2f to %.2f' % (self.XMIN, self.XMAX), 
+        #       'Y = %.2f to %.2f' % (self.YMIN, self.YMAX), 
+        #       'Z = %.2f to %.2f' % (self.ZMIN, self.ZMAX), 
+        # )
 
         self.default_vox_size_X = (self.XMAX-self.XMIN)/float(X)
         self.default_vox_size_Y = (self.YMAX-self.YMIN)/float(Y)
@@ -258,15 +258,18 @@ class Vox_util(object):
         inbounds = inbounds.squeeze(0)
         return inbounds
 
-    def voxelize_xyz(self, xyz_ref, Z, Y, X, already_mem=False, assert_cube=True):
+    def voxelize_xyz(self, xyz_ref, Z, Y, X, already_mem=False, assert_cube=True, return_vox_ind=False):
         B, N, D = list(xyz_ref.shape)
         assert(D==3)
         if already_mem:
             xyz_mem = xyz_ref
         else:
             xyz_mem = self.Ref2Mem(xyz_ref, Z, Y, X, assert_cube=assert_cube)
-        vox = self.get_occupancy(xyz_mem, Z, Y, X)
-        return vox
+        vox, vox_inds = self.get_occupancy(xyz_mem, Z, Y, X)
+        if return_vox_ind:
+            return vox, vox_inds
+        else:
+            return vox
 
     def get_occupancy_single(self, xyz, Z, Y, X):
         # xyz is N x 3 and in mem coords
@@ -339,7 +342,7 @@ class Vox_util(object):
         voxels[base.long()] = 0.0
         voxels = voxels.reshape(B, 1, Z, Y, X)
         # B x 1 x Z x Y x X
-        return voxels
+        return voxels, vox_inds
 
     def unproject_rgb_to_mem(self, rgb_camB, Z, Y, X, pixB_T_camA):
         # rgb_camB is B x C x H x W
@@ -387,10 +390,62 @@ class Vox_util(object):
             xyz_pixB = torch.stack([x_pixB, y_pixB, z_pixB], axis=2)
             rgb_camB = rgb_camB.unsqueeze(2)
             xyz_pixB = torch.reshape(xyz_pixB, [B, Z, Y, X, 3])
+            values = F.grid_sample(rgb_camB, xyz_pixB, align_corners=False)
+
+        values = torch.reshape(values, (B, C, Z, Y, X))
+        return values
+
+    def unproject_rgb_to_mem_bmm(self, rgb_camB, Z, Y, X, pixB_T_camA):
+        # rgb_camB is B x C x H x W
+        # pixB_T_camA is B x 4 x 4
+
+        # rgb lives in B pixel coords
+        # we want everything in A memory coords
+
+        # this puts each C-dim pixel in the rgb_camB
+        # along a ray in the voxelgrid
+        B, C, H, W = list(rgb_camB.shape)
+
+        xyz_memA = gridcloud3d(B, Z, Y, X, norm=False)
+        # grid_z, grid_y, grid_x = meshgrid3d(B, Z, Y, X)
+        # # these are B x Z x Y x X
+        # # these represent the mem grid coordinates
+        
+        # # we need to convert these to pixel coordinates
+        # x = torch.reshape(grid_x, [B, -1])
+        # y = torch.reshape(grid_y, [B, -1])
+        # z = torch.reshape(grid_z, [B, -1])
+        # # these are B x N
+        # xyz_mem = torch.stack([x, y, z], dim=2)
+
+        xyz_camA = self.Mem2Ref(xyz_memA, Z, Y, X)
+        xyz_pixB = utils.geom.apply_4x4_bmm(pixB_T_camA, xyz_camA)
+        normalizer = torch.unsqueeze(xyz_pixB[:,:,2], 2)
+        EPS=1e-6
+        xy_pixB = xyz_pixB[:,:,:2]/torch.clamp(normalizer, min=EPS)
+        # this is B x N x 2
+        # this is the (floating point) pixel coordinate of each voxel
+        x_pixB, y_pixB = xy_pixB[:,:,0], xy_pixB[:,:,1]
+        # these are B x N
+
+        if (0):
+            # handwritten version
+            values = torch.zeros([B, C, Z*Y*X], dtype=torch.float32)
+            for b in list(range(B)):
+                values[b] = utils.samp.bilinear_sample_single(rgb_camB[b], x_pixB[b], y_pixB[b])
+        else:
+            # native pytorch version
+            y_pixB, x_pixB = normalize_grid2d(y_pixB, x_pixB, H, W)
+            # since we want a 3d output, we need 5d tensors
+            z_pixB = torch.zeros_like(x_pixB)
+            xyz_pixB = torch.stack([x_pixB, y_pixB, z_pixB], axis=2)
+            rgb_camB = rgb_camB.unsqueeze(2)
+            xyz_pixB = torch.reshape(xyz_pixB, [B, Z, Y, X, 3])
             values = F.grid_sample(rgb_camB, xyz_pixB)
 
         values = torch.reshape(values, (B, C, Z, Y, X))
         return values
+    
     def unproject_rgb_to_mem_pc_single(self, rgb_camB, occ_memA, Z, Y, X, pixB_T_camA):
         # rgb_camB is 1 x C x H x W
         # pixB_T_camA is 1 x 4 x 4
@@ -754,7 +809,7 @@ class Vox_util(object):
         # this is B x N x 3
 
         # transform
-        xyz_A = utils.geom.apply_4x4(A_T_B, xyz_B)
+        xyz_A = utils.geom.apply_4x4_bmm(A_T_B, xyz_B)
         # we want each voxel to take its value
         # from whatever is at these A coordinates
         # i.e., we are back-warping from the "A" coords

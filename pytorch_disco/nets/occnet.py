@@ -109,9 +109,9 @@ class OccNet(nn.Module):
                 front_name = f'{front_name}_{set_name}'
             summ_writer.summ_oned(f'{front_name}/smooth_loss%s' % suffix, torch.mean(smooth_vox, dim=3))
             if occ_g is not None:
-                summ_writer.summ_occ(f'{front_name}/occ_g%s' % suffix, occ_g.unsqueeze(1))
-                summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g.unsqueeze(1), bev=True)
-                summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g.unsqueeze(1))
+                summ_writer.summ_occ(f'{front_name}/occ_g%s' % suffix, occ_g)
+                summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g, bev=True)
+                summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g)
             summ_writer.summ_occ(f'{front_name}/occ_e%s' % suffix, occ_e.unsqueeze(1))
             summ_writer.summ_oned(f'{front_name}/occ_e_oned%s' % suffix, occ_e.unsqueeze(1), bev=True)
             # summ_writer.summ_occ('occ/valid%s' % suffix, valid)
