@@ -180,6 +180,7 @@ do_save_ego = False
 do_save_vis = False
 use_det_boxes = False
 summ_all = False
+use_tight_bounds = False
 
 #----------- augs -----------#
 # do_aug2D = False

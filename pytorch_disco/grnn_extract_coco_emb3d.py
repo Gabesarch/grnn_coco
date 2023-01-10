@@ -78,6 +78,7 @@ set_name = 'enc3d_emb3d_omnidatafull_nobounds_00'
 # set_name = 'GRNN_test02'
 # set_name = 'omnidata_test'
 set_name = 'enc3d_emb3d_omnidatafull_bounds_01'
+set_name = 'enc3d_emb3d_omnidatafull_bounds_metricce'
 print(set_name)
 
 checkpoint_dir='checkpoints/' + set_name
@@ -123,6 +124,11 @@ hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_
 
 hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_02'
 hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_02'
+
+
+hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_tiny_00'
+hyp.occ_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_tiny_00'
+
 
 # output_dir = f'/lab_data/tarrlab/gsarch/encoding_model/{set_name}_subj={subj}_pl={pool_len}_nm={num_maxpool}'
 # output_dir = '/lab_data/tarrlab/gsarch/encoding_model/grnn_feats_init_32x18x18x18' #/subj%s' % (subj)

@@ -98,7 +98,7 @@ class Vox_util(object):
             assert(np.isclose(self.default_vox_size_X, self.default_vox_size_Y))
             assert(np.isclose(self.default_vox_size_X, self.default_vox_size_Z))
 
-    def Ref2Mem(self, xyz, Z, Y, X, assert_cube=True):
+    def Ref2Mem(self, xyz, Z, Y, X, assert_cube=False):
         # xyz is B x N x 3, in ref coordinates
         # transforms ref coordinates into mem coordinates
         B, N, C = list(xyz.shape)
@@ -185,14 +185,14 @@ class Vox_util(object):
         xyz_ref = utils.geom.apply_4x4(ref_T_mem, xyz_mem)
         return xyz_ref
 
-    def get_ref_T_mem(self, B, Z, Y, X, assert_cube=True):
+    def get_ref_T_mem(self, B, Z, Y, X, assert_cube=False):
         mem_T_ref = self.get_mem_T_ref(B, Z, Y, X, assert_cube=assert_cube)
         # note safe_inverse is inapplicable here,
         # since the transform is nonrigid
         ref_T_mem = mem_T_ref.inverse()
         return ref_T_mem
 
-    def get_mem_T_ref(self, B, Z, Y, X, assert_cube=True):
+    def get_mem_T_ref(self, B, Z, Y, X, assert_cube=False):
         # sometimes we want the mat itself
         # note this is not a rigid transform
 
@@ -258,7 +258,7 @@ class Vox_util(object):
         inbounds = inbounds.squeeze(0)
         return inbounds
 
-    def voxelize_xyz(self, xyz_ref, Z, Y, X, already_mem=False, assert_cube=True, return_vox_ind=False):
+    def voxelize_xyz(self, xyz_ref, Z, Y, X, already_mem=False, assert_cube=False, return_vox_ind=False):
         B, N, D = list(xyz_ref.shape)
         assert(D==3)
         if already_mem:

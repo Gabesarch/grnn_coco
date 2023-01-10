@@ -114,6 +114,23 @@ class Emb3dNet(nn.Module):
         emb_loss = self.ce(logits/temp, labels)
         # print('emb_loss', emb_loss.detach().cpu().numpy())
         return emb_loss
+
+    def compute_margin_loss(self, B, C, Z, Y, X, emb_e_vec, emb_g_vec, valid_vec, mod='', do_vis=False, summ_writer=None):
+        emb_e_vec, emb_g_vec, valid_vec = self.sample_embs(emb_e_vec,
+                                                           emb_g_vec,
+                                                           valid_vec,
+                                                           B, Z, Y, X,
+                                                           mod=mod,
+                                                           do_vis=do_vis,
+                                                           summ_writer=summ_writer)
+        emb_vec = torch.stack((emb_e_vec, emb_g_vec), dim=1).view(B*self.num_samples*self.batch_k, C)
+        # this tensor goes e,g,e,g,... on dim 0
+        # note this means 2 samples per class; batch_k=2
+        y = torch.stack([torch.arange(0,self.num_samples*B), torch.arange(0,self.num_samples*B)], dim=1).view(self.num_samples*B*self.batch_k)
+        # this tensor goes 0,0,1,1,2,2,...
+        a_indices, anchors, positives, negatives, _ = self.sampler(emb_vec)
+        margin_loss, _ = self.criterion(anchors, positives, negatives, self.beta, y[a_indices])
+        return margin_loss
             
     def forward(self, emb_e, emb_g, vis_e, vis_g, summ_writer=None):
         total_loss = torch.tensor(0.0).cuda()
@@ -139,16 +156,31 @@ class Emb3dNet(nn.Module):
         assert(self.num_samples < (B*D*H*W))
         # we will take num_samples from each one
 
-        ce_loss = self.compute_ce_loss(B, C, D, H, W, emb_e_vec, emb_g_vec.detach(), vis_g_vec, 'g', False, summ_writer)
-        total_loss = utils.misc.add_loss('emb3d/emb_ce_loss', total_loss, ce_loss, hyp.emb3d_ce_coeff, summ_writer)
+        if hyp.emb3d_ce_coeff>0:
+            ce_loss = self.compute_ce_loss(B, C, D, H, W, emb_e_vec, emb_g_vec.detach(), vis_g_vec, 'g', False, summ_writer)
+            total_loss = utils.misc.add_loss('emb3d/emb_ce_loss', total_loss, ce_loss, hyp.emb3d_ce_coeff, summ_writer)
 
-        # where g is valid, we use it as reference and pull up e
-        l2_loss = utils.basic.reduce_masked_mean(utils.basic.sql2_on_axis(emb_e-emb_g.detach(), 1, keepdim=True), vis_g)
-        total_loss = utils.misc.add_loss('emb3d/emb3d_l2_loss', total_loss, l2_loss, hyp.emb3d_l2_coeff, summ_writer)
+        if hyp.emb3d_ml_coeff>0:
+            # where g is valid, we use it as reference and pull up e
+            margin_loss = self.compute_margin_loss(B, C, D, H, W, emb_e_vec, emb_g_vec.detach(), vis_g_vec, 'g', False, summ_writer)
+            total_loss = utils.misc.add_loss('emb3D/emb_3d_ml_loss', total_loss, margin_loss, hyp.emb3d_ml_coeff, summ_writer)
 
-        l2_loss_im = torch.mean(utils.basic.sql2_on_axis(emb_e-emb_g, 1, keepdim=True), dim=3)
+        if hyp.emb3d_l2_coeff>0:
+            # where g is valid, we use it as reference and pull up e
+            l2_loss = utils.basic.reduce_masked_mean(utils.basic.sql2_on_axis(emb_e-emb_g.detach(), 1, keepdim=True), vis_g)
+            total_loss = utils.misc.add_loss('emb3d/emb3d_l2_loss', total_loss, l2_loss, hyp.emb3d_l2_coeff, summ_writer)
+
+        # dz, dy, dx = utils.basic.gradient3d(emb_e, absolute=True)
+        # smooth_loss = torch.sum(dz + dy + dx, dim=1, keepdim=True)
+        # smooth_loss_im = torch.mean(smooth_loss, dim=3)
+        # summ_writer.summ_oned('emb3D/emb_3D_smooth_loss', smooth_loss_im)
+        # emb_smooth_loss = utils.basic.reduce_masked_mean(smooth_loss, vis_e)
+        # # print("emb_smooth_loss", emb_smooth_loss)
+        # total_loss = utils.misc.add_loss('emb3D/emb_3D_smooth_loss', total_loss, emb_smooth_loss, hyp.emb3d_smooth_coeff, summ_writer)
+
         if summ_writer is not None:
             with torch.no_grad():
+                l2_loss_im = torch.mean(utils.basic.sql2_on_axis(emb_e-emb_g, 1, keepdim=True), dim=3)
                 summ_writer.summ_oned('emb3d/emb3d_l2_loss', l2_loss_im)
                 summ_writer.summ_feats('emb3d/embs', [emb_e, emb_g], pca=True)
         return total_loss

@@ -66,6 +66,59 @@ exps['trainer_omnidata_feat3d_enc3d_occ'] = [
     'snap5k', 
 ]
 
+# feat3d + occ + emb MARGIN LOSS
+exps['trainer_omnidata_feat3d_enc3d_occ_emb3d_margin'] = [
+    'omnidata_moc', # mode
+    'carla_and_replica_train',
+    'carla_and_replica_val',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    '500k_iters',
+    'lr4',
+    'B2',
+    'train_feat3d_enc3d',
+    # 'train_feat3d',
+    'train_occ',
+    'train_emb3d_margin',
+    # 'fit_vox',
+    # 'train_view',
+    # 'train_rgb',
+    'log100',
+    # 'vallog100',
+    # 'log10',
+    'use_bounds',
+    'snap5k', 
+]
+
+# feat3d + occ + emb
+exps['trainer_omnidata_feat3d_enc3d_occ_emb3d_tightbounds'] = [
+    'omnidata_moc', # mode
+    'carla_and_replica_train',
+    'carla_and_replica_val',
+    # 'bounds_train_replica_carla',
+    '8-8-8_bounds_train_tightbounds',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    '500k_iters',
+    'lr4',
+    'B2',
+    'train_feat3d_enc3d',
+    # 'train_feat3d',
+    'train_occ',
+    'train_emb3d',
+    # 'fit_vox',
+    # 'train_view',
+    # 'train_rgb',
+    'log100',
+    # 'vallog100',
+    # 'log10',
+    'use_tight_bounds',
+    # 'use_bounds',
+    'snap5k', 
+]
+
 # feat3d + occ + emb
 exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'omnidata_moc', # mode
@@ -79,17 +132,20 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'lr4',
     'B2',
     'train_feat3d_enc3d',
+    # 'train_feat3d',
     'train_occ',
     'train_emb3d',
     # 'fit_vox',
     # 'train_view',
     # 'train_rgb',
-    # 'log500',
+    'log500',
     # 'vallog100',
-    'log10',
+    # 'log10',
     'use_bounds',
     'snap5k', 
 ]
+
+
 
 ############## net configs ##############
 
@@ -121,8 +177,29 @@ groups['train_emb3d'] = [
     'emb3d_mindist = 16.0',
     'emb3d_num_samples = 2',
     # 'emb3d_ce_coeff = 1.0',
+    # 'emb3d_smooth_coeff = 0.01',
     'emb3d_ce_coeff = 1.0',
 ]
+groups['train_emb3d_margin'] = [
+    'do_emb3d = True',
+    'emb3d_ml_coeff = 1.0',
+    'emb3d_l2_coeff = 0.1',
+    'emb3d_mindist = 16.0',
+    'emb3d_num_samples = 2',
+]
+groups['train_feat3d'] = [
+    'do_feat3d = True',
+    'feat3d_smooth_coeff = 0.01',
+    'feat3d_dim = 32',
+    'feat3d_arch = "enc3d"',
+]
+# groups['train_emb3d'] = ['do_emb3d = True',
+#                          'emb3d_smooth_coeff = 0.01', 
+#                          # 'emb_3D_ml_coeff = 1.0', 
+#                          'emb3d_l2_coeff = 0.1', 
+#                          'emb3d_mindist = 16.0',
+#                          'emb3d_num_samples = 2', 
+# ]
 # groups['train_emb3d_reduced_coeff'] = [
 #     'do_emb3d = True',
 #     # 'emb3d_ml_coeff = 1.0',
@@ -142,6 +219,9 @@ groups['use_bounds'] = [
     'use_bounds = True',
 ]
 
+groups['use_tight_bounds'] = [
+    'use_tight_bounds = True',
+]
 
 groups['train_feat2D'] = [
     'do_feat2D = True',
@@ -149,9 +229,10 @@ groups['train_feat2D'] = [
     'feat2D_smooth_coeff = 0.01',
 ]
 ######## feat3d
+
 groups['train_feat3d_enc3d'] = [
     'do_feat3d = True',
-    'feat3d_smooth_coeff = 0.0',
+    'feat3d_smooth_coeff = 0.01',
     'feat3d_dim = 32',
     'feat3d_arch = "enc3d"',
 ]
@@ -181,7 +262,7 @@ groups['train_view'] = [
 groups['train_occ'] = [
     'do_occ = True',
     'occ_coeff = 1.0',
-    'occ_smooth_coeff = 0.1',
+    # 'occ_smooth_coeff = 0.1',
 ]
 groups['train_rgb'] = [
     'do_rgb = True',
@@ -224,6 +305,24 @@ SIZE = 36
 #     'X = %d' % (int(SIZE*4)),
 # ]
 
+groups['8-8-8_bounds_train_tightbounds'] = [
+    'XMIN = -8.0', # right (neg is left)
+    'XMAX = 8.0', # right
+    'YMIN = -8.0', # down (neg is up)
+    'YMAX = 8.0', # down
+    'ZMIN = -8.0', # forward
+    'ZMAX = 8.0', # forward  
+    'XMIN_val = -8.0', # right (neg is left)
+    'XMAX_val = 8.0', # right
+    'YMIN_val = -8.0', # down (neg is up)
+    'YMAX_val = 8.0', # down
+    'ZMIN_val = -8.0', # forward
+    'ZMAX_val = 8.0', # forward
+    'Z = %d' % (int(SIZE*4)),
+    'Y = %d' % (int(SIZE)),
+    'X = %d' % (int(SIZE*4)),
+]
+
 groups['8-8-8_bounds_train'] = [
     'XMIN = -8.0', # right (neg is left)
     'XMAX = 8.0', # right
@@ -231,15 +330,21 @@ groups['8-8-8_bounds_train'] = [
     'YMAX = 8.0', # down
     'ZMIN = -8.0', # forward
     'ZMAX = 8.0', # forward  
+    'XMIN_val = -8.0', # right (neg is left)
+    'XMAX_val = 8.0', # right
+    'YMIN_val = -8.0', # down (neg is up)
+    'YMAX_val = 8.0', # down
+    'ZMIN_val = -8.0', # forward
+    'ZMAX_val = 8.0', # forward
     'Z = %d' % (int(SIZE*4)),
     'Y = %d' % (int(SIZE*4)),
     'X = %d' % (int(SIZE*4)),
 ]
 
 # SIZE = 16
-# SIZE_val = 16
-# SIZE_test = 16
-# SIZE_zoom = 16
+SIZE_val = SIZE
+SIZE_test = SIZE
+SIZE_zoom = SIZE
 
 # SIZE = 20
 # SIZE_val = 20
