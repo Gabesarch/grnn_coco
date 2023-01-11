@@ -33,6 +33,7 @@ drop_path_rate = 0.1
 epochs = 300
 dataparallel = False
 predict_view1_only = False
+debug = False
 
 Z = 128
 Y = 64

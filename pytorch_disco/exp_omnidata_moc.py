@@ -143,6 +143,7 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     # 'log10',
     'use_bounds',
     'snap5k', 
+    'debug',
 ]
 
 
@@ -217,6 +218,13 @@ groups['resume_train'] = [
 
 groups['use_bounds'] = [
     'use_bounds = True',
+]
+
+groups['debug'] = [
+    'debug = True',
+    'log_freq_train = 1',
+    'log_freq_val = 1',
+    'log_freq_test = 1',
 ]
 
 groups['use_tight_bounds'] = [
