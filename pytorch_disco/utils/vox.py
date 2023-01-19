@@ -7,6 +7,7 @@ import utils.improc
 import torch.nn.functional as F
 from utils.basic import *
 import utils.basic
+from pytorch3d.transforms import Transform3d
 
 import ipdb
 st = ipdb.set_trace
@@ -419,7 +420,7 @@ class Vox_util(object):
         # xyz_mem = torch.stack([x, y, z], dim=2)
 
         xyz_camA = self.Mem2Ref(xyz_memA, Z, Y, X)
-        xyz_pixB = utils.geom.apply_4x4_bmm(pixB_T_camA, xyz_camA)
+        xyz_pixB = utils.geom.apply_4x4(pixB_T_camA, xyz_camA)
         normalizer = torch.unsqueeze(xyz_pixB[:,:,2], 2)
         EPS=1e-6
         xy_pixB = xyz_pixB[:,:,:2]/torch.clamp(normalizer, min=EPS)
@@ -770,7 +771,7 @@ class Vox_util(object):
         free = (1.0-(occ>0.0).float())*vis
         return free
 
-    def apply_4x4_to_vox(self, B_T_A, feat_A, already_mem=False, binary_feat=False, rigid=True):
+    def apply_4x4_to_vox(self, B_T_A, feat_A, already_mem=False, binary_feat=False, rigid=True, use_py3d=False):
         # B_T_A is B x 4 x 4
         # if already_mem=False, it is a transformation between cam systems
         # if already_mem=True, it is a transformation between mem systems
@@ -792,24 +793,40 @@ class Vox_util(object):
 
         # we have B_T_A in input, since this follows the other utils.geom.apply_4x4
         # for an apply_4x4 func, but really we need A_T_B
-        if rigid:
-            A_T_B = utils.geom.safe_inverse(B_T_A)
-        else:
-            # this op is slower but more powerful
+
+        if use_py3d:
+            B_T_A = Transform3d(matrix=B_T_A)
             A_T_B = B_T_A.inverse()
+        else:
+            if rigid:
+                A_T_B = utils.geom.safe_inverse(B_T_A)
+            else:
+                # this op is slower but more powerful
+                A_T_B = B_T_A.inverse()
 
 
         if not already_mem:
             cam_T_mem = self.get_ref_T_mem(B, Z, Y, X)
             mem_T_cam = self.get_mem_T_ref(B, Z, Y, X)
-            A_T_B = matmul3(mem_T_cam, A_T_B, cam_T_mem)
+            if use_py3d:
+                mem_T_cam = Transform3d(matrix=mem_T_cam)
+                cam_T_mem = Transform3d(matrix=cam_T_mem)
+                A_T_B = mem_T_cam.compose(A_T_B).compose(cam_T_mem)
+                # A_T_B = matmul3(mem_T_cam, A_T_B, cam_T_mem)
+            else:
+                A_T_B = matmul3(mem_T_cam, A_T_B, cam_T_mem)
 
         # we want to sample for each location in the bird grid
         xyz_B = gridcloud3d(B, Z, Y, X)
         # this is B x N x 3
 
         # transform
-        xyz_A = utils.geom.apply_4x4_bmm(A_T_B, xyz_B)
+        # xyz_A = utils.geom.apply_4x4_bmm(A_T_B, xyz_B)
+        if use_py3d:
+            # xyz_B = xyz_B[:,:,[1,2,0]]
+            xyz_A = A_T_B.transform_points(xyz_B)
+        else:
+            xyz_A = utils.geom.apply_4x4(A_T_B, xyz_B)
         # we want each voxel to take its value
         # from whatever is at these A coordinates
         # i.e., we are back-warping from the "A" coords
@@ -851,7 +868,7 @@ class Vox_util(object):
 
         camRs_T_camXs_ = __p(camRs_T_camXs)
         xyz_camXs_ = __p(xyz_camXs)
-        xyz_camRs_ = utils.geom.apply_4x4_bmm(camRs_T_camXs_, xyz_camXs_)
+        xyz_camRs_ = utils.geom.apply_4x4(camRs_T_camXs_, xyz_camXs_)
         occXs_ = self.voxelize_xyz(xyz_camXs_, Z, Y, X)
         occRs_ = self.voxelize_xyz(xyz_camRs_, Z, Y, X)
 

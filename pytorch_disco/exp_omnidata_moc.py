@@ -130,7 +130,8 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     # 'pretrained_occ',
     '500k_iters',
     'lr4',
-    'B2',
+    # 'B2',
+    'B1',
     'train_feat3d_enc3d',
     # 'train_feat3d',
     'train_occ',
@@ -141,9 +142,9 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'log500',
     # 'vallog100',
     # 'log10',
-    'use_bounds',
+    # 'use_bounds',
     'snap5k', 
-    'debug',
+    # 'debug',
 ]
 
 
