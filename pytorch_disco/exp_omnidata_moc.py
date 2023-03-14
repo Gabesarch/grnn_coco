@@ -125,13 +125,15 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'carla_and_replica_train',
     'carla_and_replica_val',
     # 'bounds_train_replica_carla',
-    '8-8-8_bounds_train',
-    # 'pretrained_feat3d',
-    # 'pretrained_occ',
+    # '8-8-8_bounds_train',
+    '8-8-8_bounds_train_tightbounds',
+    'pretrained_feat3d',
+    'pretrained_occ',
     '500k_iters',
     'lr4',
     # 'B2',
-    'B1',
+    'B4',
+    # 'B1',
     'train_feat3d_enc3d',
     # 'train_feat3d',
     'train_occ',
@@ -142,11 +144,46 @@ exps['trainer_omnidata_feat3d_enc3d_occ_emb3d'] = [
     'log500',
     # 'vallog100',
     # 'log10',
-    # 'use_bounds',
+    'use_bounds',
     'snap5k', 
     # 'debug',
+    # 'debug_data',
 ]
 
+# feat3d + occ
+exps['trainer_omnidata_feat3d_enc3d_occ'] = [
+    'omnidata_moc', # mode
+    'carla_and_replica_train',
+    'carla_and_replica_val',
+    # 'bounds_train_replica_carla',
+    # '8-8-8_bounds_train',
+    '8-8-8_bounds_train_tightbounds',
+    # 'pretrained_feat3d',
+    # 'pretrained_occ',
+    '500k_iters',
+    'lr4',
+    'B4',
+    # 'B1',
+    'train_feat3d_enc3d',
+    # 'train_feat3d',
+    'train_occ',
+    # 'train_emb3d',
+    # 'fit_vox',
+    # 'train_view',
+    # 'train_rgb',
+    'log500',
+    # 'log100',
+    # 'vallog100',
+    # 'log10',
+    'use_bounds',
+    # 'use_tight_bounds',
+    'snap5k', 
+    # 'debug',
+    # 'maxsamples100',
+    # 'debug_data',
+]
+
+# python main.py --m omnidata_moc --en trainer_omnidata_feat3d_enc3d_occ_emb3d --rn test00
 
 
 ############## net configs ##############
@@ -226,6 +263,15 @@ groups['debug'] = [
     'log_freq_train = 1',
     'log_freq_val = 1',
     'log_freq_test = 1',
+    'max_samples = 100',
+]
+groups['debug_data'] = [
+    'debug = True',
+    'max_samples = 100',
+]
+
+groups['maxsamples100'] = [
+    'max_samples = 100',
 ]
 
 groups['use_tight_bounds'] = [
@@ -272,6 +318,7 @@ groups['train_occ'] = [
     'do_occ = True',
     'occ_coeff = 1.0',
     # 'occ_smooth_coeff = 0.1',
+    'occ_smooth_coeff = 1.0',
 ]
 groups['train_rgb'] = [
     'do_rgb = True',
@@ -330,6 +377,7 @@ groups['8-8-8_bounds_train_tightbounds'] = [
     'Z = %d' % (int(SIZE*4)),
     'Y = %d' % (int(SIZE)),
     'X = %d' % (int(SIZE*4)),
+    'assert_cube = False',
 ]
 
 groups['8-8-8_bounds_train'] = [

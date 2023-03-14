@@ -64,13 +64,14 @@ class OccNet(nn.Module):
         occ_e_ = self.conv3d(feat)
 
         # smooth loss
-        dz, dy, dx = utils.basic.gradient3d(occ_e_, absolute=True)
-        smooth_vox = torch.mean(dx+dy+dz, dim=1, keepdims=True)
-        # if valid is not None:
-        #     smooth_loss = utils.basic.reduce_masked_mean(smooth_vox, valid)
-        # else:
-        smooth_loss = torch.mean(smooth_vox)
-        total_loss = utils.misc.add_loss('occ/smooth_loss%s' % suffix, total_loss, smooth_loss, hyp.occ_smooth_coeff, summ_writer)
+        if hyp.occ_smooth_coeff>0:
+            dz, dy, dx = utils.basic.gradient3d(occ_e_, absolute=True)
+            smooth_vox = torch.mean(dx+dy+dz, dim=1, keepdims=True)
+            # if valid is not None:
+            #     smooth_loss = utils.basic.reduce_masked_mean(smooth_vox, valid)
+            # else:
+            smooth_loss = torch.mean(smooth_vox)
+            total_loss = utils.misc.add_loss('occ/smooth_loss%s' % suffix, total_loss, smooth_loss, hyp.occ_smooth_coeff, summ_writer)
         
         occ_e_ = occ_e_.squeeze(1)
         occ_e = torch.sigmoid(occ_e_)
@@ -113,6 +114,7 @@ class OccNet(nn.Module):
                 summ_writer.summ_oned(f'{front_name}/occ_g_oned%s' % suffix, occ_g, bev=True)
                 summ_writer.summ_occ(f'{front_name}/free_g%s' % suffix, free_g)
             summ_writer.summ_occ(f'{front_name}/occ_e%s' % suffix, occ_e.unsqueeze(1))
+            summ_writer.summ_occ(f'{front_name}/occ_e_binary%s' % suffix, occ_e_binary.unsqueeze(1))
             summ_writer.summ_oned(f'{front_name}/occ_e_oned%s' % suffix, occ_e.unsqueeze(1), bev=True)
             # summ_writer.summ_occ('occ/valid%s' % suffix, valid)
 

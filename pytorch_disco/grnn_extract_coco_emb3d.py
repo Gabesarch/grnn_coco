@@ -79,6 +79,14 @@ set_name = 'enc3d_emb3d_omnidatafull_nobounds_00'
 # set_name = 'omnidata_test'
 set_name = 'enc3d_emb3d_omnidatafull_bounds_01'
 set_name = 'enc3d_emb3d_omnidatafull_bounds_metricce'
+set_name = 'enc3d_emb3d_omnidatafull_nobounds_metricce_rotaterand_00'
+set_name = 'test_00_extract_coco'
+set_name = 'enc3d_emb3d_omnidatafull_nobounds_metricce_rotaterand_fix00'
+set_name = 'enc3d_emb3d_omnidatafull_nobounds_metricce_rotaterand_fix_nopooling00'
+
+
+
+
 print(set_name)
 
 checkpoint_dir='checkpoints/' + set_name
@@ -92,6 +100,7 @@ plot_classes = False
 only_process_stim_ids = False
 reduce_channels = False
 log_freq = 500 # frequency for logging tensorboard
+# log_freq = 1 # frequency for logging tensorboard
 subjects = [1,2,3,4,5,6,7,8] # subjects to save pca for if save_subject_pca_features=True
 pretrain = True
 # print("SUBJECT:", subj)
@@ -129,11 +138,18 @@ hyp.occ_init = '02_m144x144x144_1e-4_O_c1_s.1_carla_and_replica_train_carla_and_
 hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_tiny_00'
 hyp.occ_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_bounds_tiny_00'
 
+hyp.feat3d_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_tiny_nobounds_rotaterand_00'
+hyp.occ_init = '02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_moc_omnidata_tiny_nobounds_rotaterand_00'
 
+hyp.feat3d_init = '04_m144x36x144_1e-4_O_c1_s1_carla_and_replica_train_carla_and_replica_val_ns_omnidata_moc_boundsadjusted_occ_emb3d_pretrainocc_00'
+hyp.occ_init = '04_m144x36x144_1e-4_O_c1_s1_carla_and_replica_train_carla_and_replica_val_ns_omnidata_moc_boundsadjusted_occ_emb3d_pretrainocc_00'
+
+Z, Y, X = 144, 36, 144
 # output_dir = f'/lab_data/tarrlab/gsarch/encoding_model/{set_name}_subj={subj}_pl={pool_len}_nm={num_maxpool}'
 # output_dir = '/lab_data/tarrlab/gsarch/encoding_model/grnn_feats_init_32x18x18x18' #/subj%s' % (subj)
 # output_dir = f'/lab_data/tarrlab/gsarch/encoding_model/{set_name}'
-output_dir = f'/user_data/gsarch/encoding_model/{set_name}'
+# output_dir = f'/user_data/gsarch/encoding_model/{set_name}'
+output_dir = f'/lab_data/tarrlab/scratch/gsarch/encoding_model/{set_name}'
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
 print("output_dir: ", output_dir)
@@ -385,7 +401,7 @@ class COCO_GRNN(nn.Module):
         # dataset = datasets.ImageFolder(coco_images_path, transform=transform)
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.B, shuffle=False)
 
-        self.Z, self.Y, self.X = hyp.Z, hyp.Y, hyp.X
+        self.Z, self.Y, self.X = Z, Y, X #hyp.Z, hyp.Y, hyp.X
 
         print("Z:", self.Z, "Y", self.Y, "X", self.X)
 
@@ -408,15 +424,15 @@ class COCO_GRNN(nn.Module):
     def run_extract(self):
 
         for layer in layers:
-            if os.path.isfile(f'{output_dir}/{layer}.npy'):
-                print("LAYER ALREADY EXISTS... SKIPPING")
-                continue
+            # if os.path.isfile(f'{output_dir}/{layer}.npy'):
+            #     print("LAYER ALREADY EXISTS... SKIPPING")
+            #     continue
             idx = 0
             for images, _, file_ids in self.dataloader:
 
-                if only_process_stim_ids:
-                    if file_ids not in stim_list: 
-                        continue
+                # if only_process_stim_ids:
+                #     if file_ids not in stim_list: 
+                #         continue
 
                 print('set name', set_name, 'Layer',layer,'Images processed:', idx)
 
@@ -466,7 +482,7 @@ class COCO_GRNN(nn.Module):
                 xyz_max = torch.max(xyz_maxs, dim=1)[0]/2.
                 scene_centroid = torch.tensor([0.0, 0.0, xyz_max]).unsqueeze(0).repeat(self.B,1).cuda()
                 bounds = torch.tensor([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
-                vox_util = utils.vox.Vox_util(self.Z, self.Y, self.X, set_name, scene_centroid, bounds=bounds, assert_cube=True)
+                vox_util = utils.vox.Vox_util(self.Z, self.Y, self.X, set_name, scene_centroid, bounds=bounds, assert_cube=False)
                 # self.vox_util = utils_vox.Vox_util(self.Z, self.Y, self.X, set_name, self.scene_centroid, bounds=bounds, assert_cube=True)
 
                 occXs = vox_util.voxelize_xyz(xyz_camXs, self.Z, self.Y, self.X)
@@ -489,7 +505,7 @@ class COCO_GRNN(nn.Module):
                 
                 if save_subject_pca_features or save_full_features:
                     # 3d pool
-                    feat_size_thresh = 200000
+                    feat_size_thresh = 800000
 
                     while feat_size_flat>feat_size_thresh:
                         if num_spatial==3:
@@ -501,7 +517,7 @@ class COCO_GRNN(nn.Module):
                         feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
 
                     feat_memX = feat_memX.squeeze(0).cpu().numpy().astype(np.float32)
-                    # print(feat_memX.shape)
+                    print("Feature size:", feat_memX.shape)
 
                     if idx==0:
                         if num_spatial==3:
@@ -537,6 +553,10 @@ class COCO_GRNN(nn.Module):
                 b = feats.shape[0]
                 feats = np.reshape(feats, (b, -1))
 
+                np.save(f"{output_dir}/tmp.npy", feats)
+                del feats
+                feats = np.load(f"{output_dir}/tmp.npy", mmap_mode='r')
+
                 for subj in subjects:
 
                     print(f"Saving layer {layer}, subject {subj}")
@@ -545,9 +565,9 @@ class COCO_GRNN(nn.Module):
                     pca_test_file_path =  f"{output_dir}/{layer}_subj{subj}_test_pca.npy"
                     pca_fit_path = f"{output_dir}/{layer}_subj{subj}_pca_fit.p" # path to pca model
 
-                    if os.path.isfile(pca_train_file_path) and os.path.isfile(pca_test_file_path):
-                        print(f"{pca_train_file_path} exists. delete old file to regenerate.")
-                        continue
+                    # if os.path.isfile(pca_train_file_path) and os.path.isfile(pca_test_file_path):
+                    #     print(f"{pca_train_file_path} exists. delete old file to regenerate.")
+                    #     continue
 
                     stimulus_list = np.load(
                         "%s/coco_ID_of_repeats_subj%02d.npy" % (stim_dir, subj)
@@ -556,15 +576,32 @@ class COCO_GRNN(nn.Module):
                     feature_mat = extract_feature_with_image_order(
                         stimulus_list, feats, file_order, 
                     )
+                    # feature_mat = feats[:10000]
+                    # feature_mat = np.random.rand(10000, feats.shape[1])
 
                     # split train and test set
                     X_train, X_test = train_test_split(
                         feature_mat, test_size=0.15, random_state=42
                     )
 
-                    _,_ = dimensionality_reduction_feats(X_train, X_test, layer, pca_train_file_path, pca_test_file_path, pca_fit_path, method='pca', override_existing_pca=True)
+                    del feature_mat
 
-                    del feature_mat, X_train, X_test
+                    _,_ = dimensionality_reduction_feats(
+                        X_train, 
+                        X_test, 
+                        layer, 
+                        pca_train_file_path, 
+                        pca_test_file_path, 
+                        pca_fit_path, 
+                        method='pca',
+                        # method='incremental_pca', 
+                        override_existing_pca=True,
+                        n_components=1000,
+                        )
+
+                    del X_train, X_test
+
+                os.remove(f"{output_dir}/tmp.npy")
             
             # feats = np.concatenate(feats, axis=0)
             # file_order = np.concatenate(file_order, axis=0)

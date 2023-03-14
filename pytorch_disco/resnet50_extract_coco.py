@@ -70,10 +70,13 @@ from vision_transformer import DINOHead
 model_load = 'resnet50_trained_on_SIN' # dino_replica_carla, simclr_replica_carla, resnet50_trained_on_IN, resnet50_trained_on_SIN, resnet50_trained_on_SIN_and_IN, resnet50_trained_on_SIN_and_IN_then_finetuned_on_IN
 model_load = 'vicregl_resnet50_alpha0p9'
 model_load = 'vicregl_resnet50_alpha0p75'
+model_load = 'vip_resnet50'
+model_load = 'untrained_resnet50'
 only_process_stim_ids = False
 save_full_features = False # save full features
 save_subject_pca_features = True # save pca features for each subject (fit on training images, apply to testing images)
 write_to_excel = False # append info to model_info_file
+flip_layer_order = True
 log_freq = 30000 # frequency for logging tensorboard
 subjects = [1,2,3,4,5,6,7,8] # subjects to save pca for if save_subject_pca_features=True
 batch_size = 50 # batch size for images
@@ -106,8 +109,11 @@ layers = [
     # 'out_4_0',
     # 'out_4_1',
     'out_4_2',
-    'out_avgpool',
+    # 'out_avgpool',
 ]
+if flip_layer_order:
+    layers = layers[::-1]
+print(layers)
 if model_load in ["simclr_replica_carla", "dino_replica_carla"]:
     layers = layers + ['out_fc1','out_fc2']
 XTC_init = '/home/gsarch/repo/pytorch_disco/saved_checkpoints/XTC_checkpoints/rgb2depth_consistency_wimagenet.pth'
@@ -172,6 +178,7 @@ class RESNET(nn.Module):
         super(RESNET, self).__init__()
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.transform = None
 
         model_urls = {
             'resnet50_trained_on_SIN': 'https://bitbucket.org/robert_geirhos/texture-vs-shape-pretrained-models/raw/6f41d2e86fc60566f78de64ecff35cc61eb6436f/resnet50_train_60_epochs-c8e5653e.pth.tar',
@@ -225,6 +232,19 @@ class RESNET(nn.Module):
             model = torch.hub.load('facebookresearch/vicregl:main', 'resnet50_alpha0p9')
         elif model_load=='vicregl_resnet50_alpha0p75':
             model = torch.hub.load('facebookresearch/vicregl:main', 'resnet50_alpha0p75')
+        elif model_load=='vip_resnet50':
+            from vip import load_vip
+            model = load_vip()
+            self.transform = transforms.Compose([
+                        transforms.Resize(256),
+                        transforms.CenterCrop(224),
+                        transforms.ToTensor(),
+                        model.module.normlayer
+                        ])
+            model = model.module.convnet
+            model.eval()
+        elif model_load=='untrained_resnet50':
+            print(model_load)
         else:
             assert(False) # dont know this model
 
@@ -243,13 +263,16 @@ class RESNET(nn.Module):
                 model,
                 DINOHead(embed_dim, out_dim, use_bn_in_head),
             )
-        elif 'vicregl' in model_load:
+        elif 'vicregl' in model_load or model_load=='vip_resnet50':
             pass
         else:
+            print(f"Loading model with pretrained={pretrained}")
             model = models.resnet50(pretrained=pretrained)
 
-            if not pretrained:
+            if not pretrained and not (model_load=='untrained_resnet50'):
                 model.load_state_dict(checkpoint["state_dict"])
+            else:
+                print("not loading checkpoint")
 
         for p in model.parameters():
             p.requires_grad = False
@@ -258,42 +281,46 @@ class RESNET(nn.Module):
         # list_children = list(model.children())
         # print(list_children)
 
-        self.initial_layers = nn.Sequential(
-            model.conv1,
-            model.bn1,
-            model.relu,
-            model.maxpool
-        )
-        self.layer1_0 = model.layer1[0]
-        self.layer1_1 = model.layer1[1]
-        self.layer1_2 = model.layer1[2]
-        self.layer2_0 = model.layer2[0]
-        self.layer2_1 = model.layer2[1]
-        self.layer2_2 = model.layer2[2]
-        self.layer2_3 = model.layer2[3]
-        self.layer3_0 = model.layer3[0]
-        self.layer3_1 = model.layer3[1]
-        self.layer3_2 = model.layer3[2]
-        self.layer3_3 = model.layer3[3]
-        self.layer3_4 = model.layer3[4]
-        self.layer3_5 = model.layer3[5]
-        self.layer4_0 = model.layer4[0]
-        self.layer4_1 = model.layer4[1]
-        self.layer4_2 = model.layer4[2]
-        # self.layer1 = model.layer1
-        # self.layer2 = model.layer2
-        # self.layer3 = model.layer3
-        # self.layer4 = model.layer4
-        self.avgpool = model.avgpool
-        if model_load in ["simclr_replica_carla", "dino_replica_carla"]:
-            self.fc1 = model.fc[0]
-            self.fc2 = model.fc[1:]
+        self.model = model
 
-        self.transform = transforms.Compose([
-            # transforms.Resize((480, 480)),
-            # transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
+        # self.initial_layers = nn.Sequential(
+        #     model.conv1,
+        #     model.bn1,
+        #     model.relu,
+        #     model.maxpool
+        # )
+        # self.layer1_0 = model.layer1[0]
+        # self.layer1_1 = model.layer1[1]
+        # self.layer1_2 = model.layer1[2]
+        # self.layer2_0 = model.layer2[0]
+        # self.layer2_1 = model.layer2[1]
+        # self.layer2_2 = model.layer2[2]
+        # self.layer2_3 = model.layer2[3]
+        # self.layer3_0 = model.layer3[0]
+        # self.layer3_1 = model.layer3[1]
+        # self.layer3_2 = model.layer3[2]
+        # self.layer3_3 = model.layer3[3]
+        # self.layer3_4 = model.layer3[4]
+        # self.layer3_5 = model.layer3[5]
+        # self.layer4_0 = model.layer4[0]
+        # self.layer4_1 = model.layer4[1]
+        # self.layer4_2 = model.layer4[2]
+        # # self.layer1 = model.layer1
+        # # self.layer2 = model.layer2
+        # # self.layer3 = model.layer3
+        # # self.layer4 = model.layer4
+        # self.avgpool = model.avgpool
+        # if model_load in ["simclr_replica_carla", "dino_replica_carla"]:
+        #     self.fc1 = model.fc[0]
+        #     self.fc2 = model.fc[1:]
+
+        if self.transform is None:
+            self.transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ])
 
         self.model_name = model_load
 
@@ -312,53 +339,67 @@ class RESNET(nn.Module):
             tensor: depth
         """
 
-        x = self.transform(x)
+        # x = self.transform(x) # transform is done in dataloader
 
-        out_initial = self.initial_layers(x.to(self.device))
-        # layer1_out = self.layer1(out0)
-        # layer2_out = self.layer2(layer1_out)
-        # layer3_out = self.layer3(layer2_out)
-        # layer4_out = self.layer4(layer3_out)
-        # avgpool_out = self.avgpool(layer4_out)
-        out_1_0 = self.layer1_0(out_initial)
-        out_1_1 = self.layer1_1(out_1_0)
-        out_1_2 = self.layer1_2(out_1_1) 
-        out_2_0 = self.layer2_0(out_1_2)
-        out_2_1 = self.layer2_1(out_2_0)
-        out_2_2 = self.layer2_2(out_2_1)
-        out_2_3 = self.layer2_3(out_2_2)
-        out_3_0 = self.layer3_0(out_2_3)
-        out_3_1 = self.layer3_1(out_3_0)
-        out_3_2 = self.layer3_2(out_3_1)
-        out_3_3 = self.layer3_3(out_3_2)
-        out_3_4 = self.layer3_4(out_3_3)
-        out_3_5 = self.layer3_5(out_3_4)
-        out_4_0 = self.layer4_0(out_3_5)
-        out_4_1 = self.layer4_1(out_4_0)
-        out_4_2 = self.layer4_2(out_4_1)
-        avgpool_out = self.avgpool(out_4_2)
-        avgpool_out = avgpool_out.view(self.B, -1)
-        if self.model_name in ["simclr_replica_carla", "dino_replica_carla"]:
-            fc1_out = self.fc1(avgpool_out)
-            fc2_out = self.fc2(fc1_out)
+        # out_initial = self.initial_layers(x.to(self.device))
+        # # layer1_out = self.layer1(out0)
+        # # layer2_out = self.layer2(layer1_out)
+        # # layer3_out = self.layer3(layer2_out)
+        # # layer4_out = self.layer4(layer3_out)
+        # # avgpool_out = self.avgpool(layer4_out)
+        # out_1_0 = self.layer1_0(out_initial)
+        # out_1_1 = self.layer1_1(out_1_0)
+        # out_1_2 = self.layer1_2(out_1_1) 
+        # out_2_0 = self.layer2_0(out_1_2)
+        # out_2_1 = self.layer2_1(out_2_0)
+        # out_2_2 = self.layer2_2(out_2_1)
+        # out_2_3 = self.layer2_3(out_2_2)
+        # out_3_0 = self.layer3_0(out_2_3)
+        # out_3_1 = self.layer3_1(out_3_0)
+        # out_3_2 = self.layer3_2(out_3_1)
+        # out_3_3 = self.layer3_3(out_3_2)
+        # out_3_4 = self.layer3_4(out_3_3)
+        # out_3_5 = self.layer3_5(out_3_4)
+        # out_4_0 = self.layer4_0(out_3_5)
+        # out_4_1 = self.layer4_1(out_4_0)
+        # out_4_2 = self.layer4_2(out_4_1)
+        # avgpool_out = self.avgpool(out_4_2)
+        # avgpool_out = avgpool_out.view(self.B, -1)
+        # if self.model_name in ["simclr_replica_carla", "dino_replica_carla"]:
+        #     fc1_out = self.fc1(avgpool_out)
+        #     fc2_out = self.fc2(fc1_out)
+
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        out_initial = self.model.maxpool(x)
+
+        out_1_2 = self.model.layer1(out_initial)
+        out_2_3 = self.model.layer2(out_1_2)
+        out_3_5 = self.model.layer3(out_2_3)
+        out_4_2 = self.model.layer4(out_3_5)
+
+        avgpool_out = self.model.avgpool(out_4_2)
+        # x = torch.flatten(x, 1)
+        # x = self.model.fc(x)
 
         layers = {}
         layers['out_initial'] = out_initial
-        layers['out_1_0'] = out_1_0
-        layers['out_1_1'] = out_1_1
+        # layers['out_1_0'] = out_1_0
+        # layers['out_1_1'] = out_1_1
         layers['out_1_2'] = out_1_2
-        layers['out_2_0'] = out_2_0
-        layers['out_2_1'] = out_2_1
-        layers['out_2_2'] = out_2_2
+        # layers['out_2_0'] = out_2_0
+        # layers['out_2_1'] = out_2_1
+        # layers['out_2_2'] = out_2_2
         layers['out_2_3'] = out_2_3
-        layers['out_3_0'] = out_3_0
-        layers['out_3_1'] = out_3_1
-        layers['out_3_2'] = out_3_2
-        layers['out_3_3'] = out_3_3
-        layers['out_3_4'] = out_3_4
+        # layers['out_3_0'] = out_3_0
+        # layers['out_3_1'] = out_3_1
+        # layers['out_3_2'] = out_3_2
+        # layers['out_3_3'] = out_3_3
+        # layers['out_3_4'] = out_3_4
         layers['out_3_5'] = out_3_5
-        layers['out_4_0'] = out_4_0
-        layers['out_4_1'] = out_4_1
+        # layers['out_4_0'] = out_4_0
+        # layers['out_4_1'] = out_4_1
         layers['out_4_2'] = out_4_2
         # layers['layer1_out'] = layer1_out
         # layers['layer2_out'] = layer2_out
@@ -423,10 +464,10 @@ class COCO_EXTRACT(nn.Module):
 
         self.B = batch_size # batch size
 
-        data_loader_transform = transforms.Compose([
-                            transforms.ToTensor(),
-                            ])
-        dataset = ImageFolderWithPaths(coco_images_path, transform=data_loader_transform) # our custom dataset
+        # data_loader_transform = transforms.Compose([
+        #                     transforms.ToTensor(),
+        #                     ])
+        dataset = ImageFolderWithPaths(coco_images_path, transform=self.model.transform) # our custom dataset
         
         # self.dataloader = torch.utils_DataLoader(dataset, batch_size=32, shuffle=False)
         # dataset = datasets.ImageFolder(coco_images_path, transform=transform)
@@ -453,7 +494,7 @@ class COCO_EXTRACT(nn.Module):
                     model_info_table = model_info_table.drop('Unnamed: 0', 1)
             df_appends = []
             model_names_info_table_added = []
-            for images, _, file_ids in tqdm(self.dataloader, leave=False):
+            for images, _, file_ids in tqdm(self.dataloader, leave=False, desc=str(layer_batch)):
 
                 # if only_process_stim_ids:
                 #     if file_ids not in stim_list: 
@@ -535,7 +576,7 @@ class COCO_EXTRACT(nn.Module):
                 #     file_order[idx] = file_ids.detach().cpu().numpy() 
 
                 with torch.no_grad():
-                    feats_all = self.model(images)
+                    feats_all = self.model(images.cuda())
 
                 # layer_ind = layer_map[layer]
                 for layer_ in layer_batch:

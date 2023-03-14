@@ -8,16 +8,6 @@ from sklearn.cluster import KMeans
 from backend import saverloader
 from utils.improc import MetricLogger
 
-# if hyp.do_lescroart_moc:
-#     from backend import inputs_lescroart as inputs
-# elif hyp.do_carla_moc:
-#     from backend import inputs2 as inputs
-# else:
-#     assert(False)
-
-# from backend import inputs2 as inputs
-# from backend import inputs_lescroart as inputs2\
-
 # %matplotlib inline
 import matplotlib.pyplot as plt
 # matplotlib.use('TkAgg')
@@ -30,10 +20,7 @@ from dataloader.viz_utils import *
 os.environ['OMNIDATA_PATH'] = '/lab_data/tarrlab/scratch/gsarch/omnidata/omnidata_starter_dataset2'
 os.environ['OMNIDATA_CACHE_PATH'] = '/lab_data/tarrlab/scratch/gsarch/omnidata/omnidata_starter_dataset/.cache'
 
-# from backend import inputs3 as inputs
-
 from model_base import Model
-# from nets.featnet2D import FeatNet2D
 
 use_enc3d = True
 if use_enc3d:
@@ -65,21 +52,6 @@ from   pytorch3d.transforms import euler_angles_to_matrix
 
 from tqdm import tqdm
 
-# np.set_printoptions(precision=2)
-# np.random.seed(0)
-
-# import ipdb
-# st = ipdb.set_trace
-
-# print('here')
-# import pdb
-# st = pdb.set_trace()
-# from remote_pdb import set_trace
-# st = set_trace()
-
-# import remote_pdb
-# PYTHONBREAKPOINT=remote_pdb.set_trace
-
 # fix the seed for reproducibility
 torch.manual_seed(42)
 np.random.seed(42)
@@ -110,20 +82,22 @@ class OMNIDATA_MOC(Model):
         print("BATCH SIZE:", hyp.batch_sizes["train"])
         if hyp.debug:
             data_amount = 'debug'
+            max_samples = hyp.max_samples
             datasets_train = dict(
                     # HypersimDataset   = dict(),
-                    # TaskonomyDataset = dict(),
-                    ReplicaDataset   = dict(),
+                    TaskonomyDataset = dict(),
+                    # ReplicaDataset   = dict(),
                     # GSOReplicaDataset   = dict(),
                 )
             datasets_val = dict(
                     # HypersimDataset   = dict(),
-                    # TaskonomyDataset = dict(),
-                    ReplicaDataset   = dict(),
+                    TaskonomyDataset = dict(),
+                    # ReplicaDataset   = dict(),
                     # GSOReplicaDataset   = dict(),
                 )
         else:
             data_amount = 'tiny'
+            max_samples = hyp.max_samples
             datasets_train = dict(
                     HypersimDataset   = dict(),
                     TaskonomyDataset = dict(),
@@ -144,6 +118,7 @@ class OMNIDATA_MOC(Model):
                     # data_amount  = 'debug',
                     # data_amount  = 'tiny',
                     # data_amount  = 'fullplus',
+                    max_samples = max_samples,
                     data_amount = data_amount,
                     data_path    = os.environ['OMNIDATA_PATH'],
                     cache_dir    = os.environ['OMNIDATA_CACHE_PATH'],
@@ -473,6 +448,11 @@ class CarlaMocModel(nn.Module):
         __u = lambda x: utils.basic.unpack_seqdim(x, self.B)
         
         self.rgb_camXs = feed["rgb"]-0.5
+
+        if len(self.rgb_camXs)<self.B:
+            all_ok = False
+            return all_ok
+
         self.depth_camXs = feed["depth_euclidean"].squeeze(2)
         self.mask_valid_camXs = feed["mask_valid"].squeeze(2).bool()
         self.point_info = feed["point_info"]
@@ -483,97 +463,43 @@ class CarlaMocModel(nn.Module):
         self.W = self.rgb_camXs.shape[-2]
         self.H = self.rgb_camXs.shape[-1]
 
-        # print(self.W, self.H)
+        # print(self.dataset)
 
-        # fov = 90
-        # hfov = float(fov) * np.pi / 180.
+        cam_params = { k: v.cuda(non_blocking=True)
+                        for (k, v) in get_batch_cam_params(feed).items()}
+        # self.fov = cam_params['fov']
+
         # pix_T_camX = np.array([
-        #     [(self.W/2.)*1 / np.tan(hfov / 2.), 0., 0., 0.],
-        #     [0., (self.H/2.)*1 / np.tan(hfov / 2.), 0., 0.],
+        #     [(self.W/2.)*1 , 0., 0., 0.],
+        #     [0., (self.H/2.)*1, 0., 0.],
         #     [0., 0.,  1, 0],
         #     [0., 0., 0, 1]])
         # pix_T_camX[0,2] = self.W/2.
         # pix_T_camX[1,2] = self.H/2.
-        
-        # print(self.pix_T_cams.shape)
-        # assert False
-        # print(1, self.pix_T_cams)
+        # self.pix_T_cams = torch.from_numpy(pix_T_camX).cuda().float().unsqueeze(0).unsqueeze(0).expand(self.B,self.S,4,4).clone()
 
-        # print(self.depth_camXs)
-
-        cam_params = { k: v.cuda(non_blocking=True)
-                        for (k, v) in get_batch_cam_params(feed).items()}
-        # print(cam_params.keys())
-        # self.pix_T_cams = cam_params['proj_K']
-        # print(feed["point_info"][b])
-        self.fov = cam_params['fov']
-        # print(self.fov.shape)
-
-        pix_T_camX = np.array([
-            [(self.W/2.)*1 , 0., 0., 0.],
-            [0., (self.H/2.)*1, 0., 0.],
-            [0., 0.,  1, 0],
-            [0., 0., 0, 1]])
-        pix_T_camX[0,2] = self.W/2.
-        pix_T_camX[1,2] = self.H/2.
-        self.pix_T_cams = torch.from_numpy(pix_T_camX).cuda().float().unsqueeze(0).unsqueeze(0).expand(self.B,self.S,4,4).clone()
-
-        tan_hfov = torch.tan(self.fov / 2.)
-        # pix_T_cams_ = self.pix_T_cams.clone()
-        for b in range(self.B):
-            for s in range(self.S):
-                self.pix_T_cams[b,s,0,0] /= tan_hfov[b,s]
-                self.pix_T_cams[b,s,1,1] /= tan_hfov[b,s]
-
-        # print(self.fov)
-        # print(tan_hfov)
-        # print(1, self.pix_T_cams[0,0])
-        # print(2, self.pix_T_cams[0,1])
-        # print(3, self.pix_T_cams[1,0])
-        # print(4, self.pix_T_cams[1,1])
-        # assert False
-
-
-        # view_idxs=list(np.arange(self.S))
-        # self.camRs_T_camXs = []
-        # self.xyz_camXs = []
-        # self.xyz_camRs = []
-        # self.depth_camXs = []
-        # for batch_idx in range(self.B):
-        #     # pos        = feed.get('positive', feed)
-        #     # bpv        = feed['building'][batch_idx], feed['point'][batch_idx], feed['view'][batch_idx]
-        #     # dataset    = feed['dataset'][batch_idx]
-        #     mask_valid = feed['mask_valid'].bool()[batch_idx,view_idxs]#.squeeze(1)
-        #     depth   = feed['depth_euclidean'][batch_idx,view_idxs]#.squeeze(1)
-        #     # rgb        = feed['rgb'][batch_idx,view_idxs].unsqueeze(1)
-        #     cam_params = { k: v[batch_idx,view_idxs].unsqueeze(1).cuda(non_blocking=True)
-        #                 for (k, v) in get_batch_cam_params(feed).items()}
-        #     # print("cam_params", cam_params)
-        #     # pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=distance, features=rgb, **cam_params)
-        #     cameras    = GenericPinholeCamera(
-        #                     R=cam_params['cam_to_world_R'].squeeze(1),
-        #                     T=cam_params['cam_to_world_T'].squeeze(1),
-        #                     K=cam_params['proj_K'].squeeze(1),
-        #                     K_inv=cam_params['proj_K_inv'].squeeze(1),
-        #                     device=depth.device)
-        #     xyz_camX = cameras.unproject_metric_depth_euclidean(depth.squeeze(1), world_coordinates=False).reshape(len(cameras), -1, 3)
-        #     print(1, xyz_camX.shape)
-        #     world_to_view_transform = cameras.get_world_to_view_transform()
-        #     xyz_origin = world_to_view_transform.inverse().transform_points(xyz_camX) #.reshape((batch_size, height, width, 3))
-        #     print(2, xyz_origin.shape)
-
-        #     self.xyz_camXs.append(xyz_camX)
-        #     self.xyz_camRs.append(xyz_origin)
-        #     self.camRs_T_camXs.append(world_to_view_transform.get_matrix())
-        #     self.depth_camXs.append(depth)
+        # tan_hfov = torch.tan(self.fov / 2.)
+        # # pix_T_cams_ = self.pix_T_cams.clone()
+        # for b in range(self.B):
+        #     for s in range(self.S):
+        #         self.pix_T_cams[b,s,0,0] /= tan_hfov[b,s]
+        #         self.pix_T_cams[b,s,1,1] /= tan_hfov[b,s]
 
         mask_valid = __p(feed['mask_valid'].bool()) #[batch_idx,view_idxs]#.squeeze(1)
         depth   = __p(feed['depth_euclidean']) #[batch_idx,view_idxs] #.squeeze(1)
-        # rgb        = feed['rgb'][batch_idx,view_idxs].unsqueeze(1)
+        rgb        = feed['rgb'] #[batch_idx,view_idxs].unsqueeze(1)
         cam_params = { k: __p(v).unsqueeze(1).cuda(non_blocking=True)
                     for (k, v) in get_batch_cam_params(feed).items()}
         # print("cam_params", cam_params)
-        # pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=distance, features=rgb, **cam_params)
+        pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=depth, features=rgb, **cam_params)
+        field = "points" 
+        field_list = [getattr(p, field + "_list")() for p in pcs_full]
+        field_list = [f[0] for f in field_list]
+
+        if len(field_list[0])==0:
+            all_ok = False
+            return all_ok
+
         cameras    = GenericPinholeCamera(
                         R=cam_params['cam_to_world_R'].squeeze(1),
                         T=cam_params['cam_to_world_T'].squeeze(1),
@@ -581,31 +507,57 @@ class CarlaMocModel(nn.Module):
                         K_inv=cam_params['proj_K_inv'].squeeze(1),
                         device=depth.device)
         xyz_camX = cameras.unproject_metric_depth_euclidean(depth.squeeze(1), world_coordinates=False).reshape(len(cameras), -1, 3)
+        # print(xyz_camX.shape)
+
+        # normalize PC
+        # xyz_camX_u = __u(xyz_camX)
+        # for b in range(self.B):
+        #     xyz_camX_u[b] = xyz_camX_u[b] - torch.median(xyz_camX_u[b,0],dim=0).values.unsqueeze(0).unsqueeze(0)
+        # xyz_camX = __p(xyz_camX_u)
+
+        # subtract_median = True
+        # if subtract_median:
+        #     xyz_camX = xyz_camX - torch.median
+
         world_to_view_transform = cameras.get_world_to_view_transform()
+        # print(xyz_camX.shape)
+        # xyz_camX = xyz_camX[:,:,[0,2,1]]
         xyz_origin = world_to_view_transform.inverse().transform_points(xyz_camX) #.reshape((batch_size, height, width, 3))
-        # print(1, xyz_origin, torch.max(xyz_origin), torch.min(xyz_origin))
 
         self.xyz_camXs = __u(xyz_camX)
         self.origin_T_camXs = __u(world_to_view_transform.inverse().get_matrix())
         self.xyz_camRs = __u(xyz_origin)
         self.depth_camXs = __u(depth)
+        self.mask_valid = __u(mask_valid)
 
-        # R     = euler_angles_to_matrix(torch.tensor(
-        #           [(ex - EULER_X_OFFSET_RADS, -ey, -ez)],
-        #           dtype=torch.double, device=device), 'XZY')
+        # print(self.depth_camXs.shape)
+        # depth_vis = self.depth_camXs.cpu().numpy()[0,0].squeeze()
+        # depth_vis[depth_vis>20.] = 0
+        # print(1, np.max(depth_vis))
+        # plt.figure(1); plt.clf()
+        # plt.imshow(depth_vis)
+        # plt.colorbar()
+        # plt.savefig('images/test.png')
+        # assert(False)
+
+
+        # HypersimDataset axes are different than the rest - HACK to adjust for this
+        for batch_idx in range(self.B):
+            if self.dataset[batch_idx]=="HypersimDataset":
+                self.xyz_camXs[batch_idx] = self.xyz_camXs[batch_idx,:,:,[0,2,1]]
+                self.xyz_camRs[batch_idx] = self.xyz_camRs[batch_idx,:,:,[0,2,1]]
+                # print(xyz_camX.shape)
+                # print(xyz_origin.shape)
 
         degrees_rotate = torch.rand(self.B, dtype=torch.double, device='cuda') * 179  # degrees to rotate the second view
-        # print(torch.tensor([(0., np.radians(degrees_rotate), 0.)],dtype=torch.double, device='cuda').repeat(self.B,1).shape)
         euler_angles = torch.zeros((self.B, 3), dtype=torch.double, device='cuda') #torch.tensor([(np.zeros(self.B), np.zeros(self.B), np.radians(degrees_rotate))], dtype=torch.double, device='cuda')
         euler_angles[:,2] = degrees_rotate
         R_pc_transform = euler_angles_to_matrix(euler_angles, 'XZY')
 
-        T_pc_transform = torch.rand((self.B, 3), dtype=torch.double, device='cuda') # torch.tensor([(0., 0., 0.)], dtype=torch.double, device='cuda').repeat(self.B,1)
+        T_pc_transform = torch.tensor([(0., 0., 0.)], dtype=torch.double, device='cuda').repeat(self.B,1) #torch.rand((self.B, 3), dtype=torch.double, device='cuda') 
 
         RT_pc_transform = Rotate(R_pc_transform, device=R_pc_transform.device).compose(Translate(T_pc_transform, device=R_pc_transform.device))
 
-
-        # euler_angles = torch.tensor([(0., np.radians(degrees_rotate), 0.)], dtype=torch.double, device='cuda').repeat(self.B,1)
         euler_angles = torch.zeros((self.B, 3), dtype=torch.double, device='cuda') #torch.tensor([(np.zeros(self.B), np.zeros(self.B), np.radians(degrees_rotate))], dtype=torch.double, device='cuda')
         euler_angles[:,1] = degrees_rotate
         R_ = utils.geom.eul2rotm(*euler_angles.unbind(1))
@@ -613,100 +565,8 @@ class CarlaMocModel(nn.Module):
         camX0_T_camX0 = utils.geom.eye_4x4s(self.B, 1)
         self.camX0s_T_camXs = torch.cat([camX0_T_camX0, camX1_T_camX0], dim=1)
         self.camXs_T_camX0s = __u(utils.geom.safe_inverse(__p(self.camX0s_T_camXs)))
-          
-
-
-        # self.camX0s_T_camXs = utils.geom.get_camM_T_camXs(self.origin_T_camXs, ind=0)
-        # self.camXs_T_camX0s = __u(utils.geom.safe_inverse(__p(self.origin_T_camXs)))
-        # self.camXs_T_origin = __u(utils.geom.safe_inverse(__p(self.origin_T_camXs)))
-        # print(self.xyz_camRs.shape)
-        self.xyz_camXs = torch.stack([self.xyz_camRs[:,0], RT_pc_transform.transform_points(self.xyz_camRs[:,1])], dim=1)
-        # print(self.xyz_camXs.shape)
-
-
-        # print(0, self.camX0s_T_camXs.shape)
-        # camX0s_T_camXs_py3d = Transform3d(matrix=__p(self.camX0s_T_camXs))
-        # print(1,self.camX0s_T_camXs)
-        # print(2,self.camX0s_T_camXs.shape)
-        # self.xyz_camX0s = __u(camX0s_T_camXs_py3d.transform_points(__p(self.xyz_camXs)))
-        # print(3,self.xyz_camX0s.shape)
-
-        # self.xyz_camXs = torch.
-        # assert False
-
-        # print(self.pix_T_cams)
-        # print(2, self.pix_T_cams)
-        # # print(self.point_info)
-        # assert False
-        # print(self.pix_T_cams.shape)
-        # print(self.depth_camXs.shape)
-        # self.Rs = cam_params['cam_to_world_R']
-        # self.Ts = cam_params['cam_to_world_T']
-
-        # EULER_X_OFFSET_RADS = math.radians(90.0)
-        # R = __p(cam_params['camera_location']).unbind(1)
-        # ex, ey, ez = R
-        # # self.Rs = __u(utils.geom.eul2rotm(EULER_X_OFFSET_RADS - ex, -ez, -ey))
-        # self.Rs = __u(utils.geom.eul2rotm(EULER_X_OFFSET_RADS + ex, ey, ez))
-        # # T = __p(cam_params['camera_rotation']).unbind(1)
-        # # Tx, Ty, Tz = location
-        # # T     = torch.tensor([[-Tx, Tz, Ty]], dtype=torch.double, device=device)
-        # T = __p(cam_params['camera_rotation']).unbind(1)
-        # Tx, Ty, Tz = T
-        # # self.Ts    = __u(torch.stack([-Tx, Tz, Ty], dim=1))
-        # self.Ts    = __u(torch.stack([Tx, Tz, Ty], dim=1))
-
-        # print('Ts', self.Ts)
-        # print('Rs', ex, ey, ez)
-
-        # print(__p(self.Ts))
-        # print(self.Rs)
-
-
-        # print(self.Rs, self.Ts)
-        # print(self.Rs.shape, self.Ts.shape)
-        # self.camXs_T_origin = __u(utils.geom.merge_rt(__p(self.Rs), __p(self.Ts)))
-        # self.origin_T_camXs = __u(utils.geom.safe_inverse(__p(self.camXs_T_origin)))
-        # self.origin_T_camXs = __u(utils.geom.merge_rt(__p(self.Rs), __p(self.Ts)))
-        # self.camXs_T_origin = __u(utils.geom.safe_inverse(__p(self.origin_T_camXs)))
-
-        # self.camX0s_T_camXs = utils.geom.get_camM_T_camXs(self.origin_T_camXs, ind=0)
-
-        # self.xyz_camXs = __u(utils.geom.depth2pointcloud(__p(self.depth_camXs.unsqueeze(2)), __p(self.pix_T_cams)))
-        # remove = torch.abs(self.depth_camXs.reshape(self.B,self.S,-1))>20.
-        # print(remove[0,0])
-        # self.mask_valid_camXs = self.mask_valid_camXs.reshape(self.B,self.S,-1)
-        # for b in range(self.B):
-        #     for s in range(self.S):
-        #         self.mask_valid_camXs[b,s,remove[b,s]] = 0
-        # # self.mask_valid_camXs[torch.abs(self.depth_camXs.reshape(self.B,self.S,-1))>20.] = 0
-        # self.mask_valid_camXs = self.mask_valid_camXs.reshape(self.B,self.S,self.W,self.H)
-
-        # print(self.depth_camXs)
-        # print(self.mask_valid_camXs)
-        # print(self.mask_valid_camXs.shape)
-        # print(self.depth_camXs.shape)
-        # where_invalid = np.where(np.abs(self.depth_camXs.cpu().numpy())>20.)
-        # self.mask_valid_camXs[where_invalid] = 0
-        # self.depth_camXs[where_invalid] = 0.
-        # # print(self.depth_camXs[0,0].shape)
-        # print(self.depth_camXs[0,0,0,0])
-        # plt.figure()
-        # plt.imshow(self.depth_camXs[0,0].cpu().numpy())
-        # # plt.imshow(self.mask_valid_camXs[0,0].cpu().numpy())
-        # plt.colorbar()
-        # plt.savefig('images/test.png')
-        # print(self.mask_valid_camXs[0,0,0,0])
-        # print(self.mask_valid_camXs)
-        # self.depth_camXs = self.depth_camXs.reshape(self.B, self.S, -1)
-        # print(self.depth_camXs[0,0,self.mask_valid_camXs[0,0].reshape(-1).bool()])
-        # print(torch.max(self.depth_camXs[0,0,self.mask_valid_camXs[0,0].reshape(-1).bool()]), torch.min(self.depth_camXs[0,0,self.mask_valid_camXs[0,0].reshape(-1).bool()]))
-        # assert False
         
-
-        # print(self.xyz_camXs.shape)
-        # self.xyz_camX0s = __u(utils.geom.apply_4x4(__p(self.camX0s_T_camXs), __p(self.xyz_camXs)))
-
+        self.xyz_camXs = torch.stack([self.xyz_camRs[:,0], RT_pc_transform.transform_points(self.xyz_camRs[:,1])], dim=1)
 
         self.Z, self.Y, self.X = hyp.Z, hyp.Y, hyp.X
         self.Z1, self.Y1, self.X1 = int(self.Z/1), int(self.Y/1), int(self.X/1)
@@ -714,100 +574,29 @@ class CarlaMocModel(nn.Module):
         self.Z4, self.Y4, self.X4 = int(self.Z/4), int(self.Y/4), int(self.X/4)
         
         view_idxs=list(np.arange(self.S))
-        # self.xyz_camRs = []
-        # self.pix_T_cams = []
         self.vox_utils = []
         self.occXs = []
         self.unpXs = []
         self.occ_halfmemX0_sup = []
         self.free_halfmemX0_sup = []
-        # self.xyz_camXs = []
-        # self.camXs_T_origin = []
-        # self.origin_T_camXs = []
-        # self.camX0s_T_camXs = []
-        # self.mask_valid = []
-        # self.xyz_camX0s = []
         for batch_idx in range(self.B):
-            # # pos        = feed.get('positive', feed)
-            # bpv        = feed['building'][batch_idx], feed['point'][batch_idx], feed['view'][batch_idx]
-            # dataset    = feed['dataset'][batch_idx]
-            # mask_valid = feed['mask_valid'].bool()[batch_idx,view_idxs]#.squeeze(1)
-            # distance   = feed['depth_euclidean'][batch_idx,view_idxs]#.squeeze(1)
-            # rgb        = feed['rgb'][batch_idx,view_idxs].unsqueeze(1)
-            # cam_params = { k: v[batch_idx,view_idxs].unsqueeze(1).cuda(non_blocking=True)
-            #             for (k, v) in get_batch_cam_params(feed).items()}
-            # # print("cam_params", cam_params)
-            # pcs_full   = batch_unproject_to_multiview_pointclouds(mask_valid=mask_valid, distance=distance, features=rgb, **cam_params)
-            # cameras    = GenericPinholeCamera(
-            #                 R=cam_params['cam_to_world_R'].squeeze(1),
-            #                 T=cam_params['cam_to_world_T'].squeeze(1),
-            #                 K=cam_params['proj_K'].squeeze(1),
-            #                 K_inv=cam_params['proj_K_inv'].squeeze(1),
-            #                 device=distance.device)
-            # pcs_full   = join_pointclouds_as_batch(pcs_full)
-
-            # xyz_camXs = cameras.unproject_metric_depth_euclidean(distance.squeeze(1), world_coordinates=False).reshape(1,len(cameras), -1, 3)
-
-            # depth_camXs = feed['depth_euclidean'][batch_idx,view_idxs]
-            # print(depth_camXs.shape)
-            
-            # camRs_T_camXs = cameras.get_world_to_view_transform().inverse().get_matrix()
-            # camXs_T_camRs = cameras.get_world_to_view_transform().get_matrix()
-
-            # camXs_T_origin = cameras.get_world_to_view_transform().inverse().get_matrix().unsqueeze(0)
-            # origin_T_camXs = cameras.get_world_to_view_transform().get_matrix().unsqueeze(0)
-            
-            
-            # print(1, self.camXs_T_origin.shape)
-            # print(2, self.origin_T_camXs.shape)
-            
-            
-            # print(camX0s_T_camXs.squeeze())
-            # print(cam_params.keys())
-            # print(cam_params['cam_to_world_R'].squeeze(1))
-            # print(cam_params['cam_to_world_R'].squeeze(1).shape)
-            # print(cam_params['cam_to_world_T'].squeeze(1))
-            # print(cam_params['cam_to_world_T'].squeeze(1).shape)
-            # print(cam_params['proj_K'])
-            # print(self.camX0s_T_camXs)
-            # print(3, self.camX0s_T_camXs.shape)
-            # print(self.xyz_camXs.shape)
-
-            # field = "points" 
-            # field_list = [getattr(p, field + "_list")() for p in pcs_full]
-            # field_list = [f[0] for f in field_list]
-
-            # if torch.sum(self.mask_valid_camXs[batch_idx, 0])==0:
-            #     all_ok = False
-            #     return all_ok
-
-            # mask_valid = feed['mask_valid'].bool()[batch_idx,view_idxs].transpose(1,0).reshape(1, self.S, xyz_camXs.shape[-2])
-
-            # print(self.mask_valid.shape)
-
-            
-            # print(self.xyz_camX0s.shape)
-
-            # aggregated_field_list = torch.cat(field_list, dim=0)
+            # aggregated_xyz_camX0s = torch.cat(self.xyz_camRs[batch_idx].unbind(0), dim=0)
+            # print(self.mask_valid)
             aggregated_xyz_camX0s = []
-            # print(torch.sum(1-self.mask_valid_camXs[0,0].flatten().long()))
             for s in range(self.S):
-                # print(self.mask_valid_camXs[batch_idx,s].flatten())
-                # print(self.mask_valid_camXs[batch_idx,s].flatten().shape)
-                # print(self.xyz_camX0s.shape)
-                # aggregated_xyz_camX0s.append(self.xyz_camRs[batch_idx,s:s+1,self.mask_valid_camXs[batch_idx,s].reshape(-1).bool(),:])
-                aggregated_xyz_camX0s.append(self.xyz_camRs[batch_idx,s:s+1,:,:])
-            aggregated_xyz_camX0s = torch.cat(aggregated_xyz_camX0s, dim=1).squeeze(0)
-            # print(aggregated_xyz_camX0s.shape)
-            xyz_means = torch.median(aggregated_xyz_camX0s, dim=0).values.cpu().numpy()
-            # print(xyz_means)
-            # print(1, self.xyz_camX0s[:,0])
-            # print(1, self.xyz_camXs[:,0])
+                aggregated_xyz_camX0s.append(self.xyz_camXs[batch_idx,s,self.mask_valid[batch_idx,s].flatten(),:])
+            # aggregated_xyz_camX0s = torch.cat(self.xyz_camXs[batch_idx].unbind(0), dim=0)
+            aggregated_xyz_camX0s = torch.cat(aggregated_xyz_camX0s, dim=0)
 
-            # pix_T_cams = cam_params['proj_K'].squeeze(1)
-            # self.pix_T_cams.append(pix_T_cams)
-            
-            # pixX0_T_camRs = utils.basic.matmul2(pix_T_cams, camXs_T_camRs)
+            if len(aggregated_xyz_camX0s)==0:
+                all_ok = False
+                return all_ok
+            # where_valid = torch.where(aggregated_xyz_camX0s<70.)
+            # print(where_valid)
+            # print(aggregated_xyz_camX0s.shape)
+            # aggregated_xyz_camX0s = aggregated_xyz_camX0s[where_valid[0], where_valid[1]]
+            xyz_means = torch.median(aggregated_xyz_camX0s, dim=0).values.cpu().numpy()
+            # xyz_means = torch.mean(aggregated_xyz_camX0s, dim=0).cpu().numpy()
 
             scene_centroid_x_noise = np.random.normal(0, 0.5) #+ offset_x
             scene_centroid_y_noise = np.random.normal(0, 0.5) #+ offset_y
@@ -816,46 +605,43 @@ class CarlaMocModel(nn.Module):
             scene_centroid_B = torch.tensor([scene_centroid_x_noise+xyz_means[0], scene_centroid_y_noise+xyz_means[1], xyz_means[2]+scene_centroid_z_noise]).cuda().squeeze(0).reshape(1,3)
             assert(not (hyp.use_bounds and hyp.use_tight_bounds))
             if hyp.use_tight_bounds:
-                xyz_argmax = torch.argmax(torch.abs(aggregated_xyz_camX0s), dim=0)
+                # mask = torch.where(aggregated_xyz_camX0s<20.)
+                bounds_aggregated_xyz_camX0s = torch.abs(aggregated_xyz_camX0s)
+                bounds_aggregated_xyz_camX0s[bounds_aggregated_xyz_camX0s>20.] = -9999
+                xyz_argmax = torch.argmax(bounds_aggregated_xyz_camX0s, dim=0)
                 xyz_maxs = torch.tensor([abs(aggregated_xyz_camX0s[xyz_argmax[0],0]), abs(aggregated_xyz_camX0s[xyz_argmax[1],1]), abs(aggregated_xyz_camX0s[xyz_argmax[2],2])])
                 xyz_max = torch.clip(xyz_maxs, max=20.0).cpu().numpy() / 2.
                 bounds_B = torch.tensor([-float(xyz_max[0]), float(xyz_max[0]), -float(xyz_max[1]), float(xyz_max[1]), -float(xyz_max[2]), float(xyz_max[2])]).cuda()
+                # print(bounds_B)
                 self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=False))
             elif hyp.use_bounds:
-                xyz_argmax = torch.argmax(torch.abs(aggregated_xyz_camX0s))
-                xyz_max = abs(aggregated_xyz_camX0s.flatten()[xyz_argmax])
-                xyz_max = float(torch.clip(xyz_max, max=20.0).cpu().numpy() / 2.)
-                # print(xyz_max)
+                if False:
+                    depth_vis = self.depth_camXs[batch_idx].reshape(-1)
+                    depth_vis[depth_vis>20.] = 0
+                    xyz_max = torch.max(depth_vis)
+                else:
+                    # print(xyz_means)
+                    # print(scene_centroid_B)
+                    # print(aggregated_xyz_camX0s[:,2])
+                    bounds_aggregated_xyz_camX0s = torch.abs(aggregated_xyz_camX0s - scene_centroid_B)
+                    # print(bounds_aggregated_xyz_camX0s[:,0])
+                    where_mask = torch.where(bounds_aggregated_xyz_camX0s>20.)
+                    # print(len(where_mask))
+                    bounds_aggregated_xyz_camX0s[where_mask[0], where_mask[1]] = -9999
+                    # print(bounds_aggregated_xyz_camX0s.shape)
+                    xyz_max = torch.max(bounds_aggregated_xyz_camX0s.flatten())
+                    # print(xyz_argmax)
+                    # xyz_max = abs(aggregated_xyz_camX0s.flatten()[xyz_argmax])
+                    # print(torch.max(bounds_aggregated_xyz_camX0s, dim=0))
+                    # print(xyz_max)
+                xyz_max = float(torch.clip(xyz_max, max=20.0).cpu().numpy())
                 bounds_B = torch.tensor([-xyz_max, xyz_max, -xyz_max, xyz_max, -xyz_max, xyz_max]).cuda()
-                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=True))
+                # print(bounds_B)
+                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, bounds=bounds_B, assert_cube=hyp.assert_cube))
             else:
-                # print(2, scene_centroid_B)
-                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, assert_cube=True))
-            \
+                self.vox_utils.append(utils.vox.Vox_util(self.Z, self.Y, self.X, feed['set_name'], scene_centroid_B, assert_cube=hyp.assert_cube))
+            
             if True:
-                # occXs = []
-                # unpXs = []
-                # # occ_halfmemX0_sup = []
-                # # free_halfmemX0_sup = []
-                # for s in range(self.S):
-                #     occXs_, vox_inds = self.vox_utils[-1].voxelize_xyz(self.xyz_camXs[batch_idx,s], self.Z, self.Y, self.X, return_vox_ind=True)
-                #     occXs.append(occXs_)
-
-                #     # unproject rgb into voxels
-                #     rgb_masked = self.rgb_camXs[batch_idx, s].reshape(3,-1)[:,mask_valid[s].reshape(-1)]
-                #     unpXs = torch.zeros([3, 1*self.Z*self.Y*self.X], device=torch.device('cuda')).float()
-                #     unpXs[:,vox_inds.long()] = rgb_masked
-                #     unpXs = unpXs.reshape(3,self.Z,self.Y,self.X)
-                    
-                #     # unpXs = self.vox_utils[-1].unproject_rgb_to_mem_bmm(
-                #     #     self.rgb_camXs[batch_idx, s].unsqueeze(0), self.Z, self.Y, self.X, pixX0_T_camRs[s].unsqueeze(0))
-                #     unpXs_.append(unpXs)
-
-                    # unpXs = self.vox_utils[-1].unproject_rgb_to_mem(
-                    #     self.rgb_camXs[b], self.Z, self.Y, self.X, self.pix_T_cams[b])
-                    # unpXs_.append(unpXs)
-                    # unpXs = torch.stack(unpXs_)
-                # print(pix_T_cams.shape)
                 occXs, vox_inds = self.vox_utils[-1].voxelize_xyz(self.xyz_camXs[batch_idx], self.Z, self.Y, self.X, return_vox_ind=True)
                 rgb_masked = self.rgb_camXs[batch_idx].reshape(self.S,3,-1).permute(1,0,2).reshape(3,-1)
                 unpXs = torch.zeros([self.S, 3, self.Z, self.Y, self.X], device=torch.device('cuda')).float()
@@ -878,19 +664,8 @@ class CarlaMocModel(nn.Module):
 
                 unpXs = self.vox_utils[-1].unproject_rgb_to_mem(
                             self.rgb_camXs[batch_idx], self.Z, self.Y, self.X, self.pix_T_cams[batch_idx]).unsqueeze(0)
-                # print(unpXs.shape)
-
             
-
-            # occ_halfmemX0_sup_, free_halfmemX0_sup_, _, _ = self.vox_utils[-1].prep_occs_supervision(
-            #     camRs_T_camXs.unsqueeze(0),
-            #     xyz_camXs.unsqueeze(0),
-            #     self.Z4, self.Y4, self.X4,
-            #     agg=True
-            #     )
             if use_enc3d:
-                # print(self.xyz_camXs[batch_idx:batch_idx+1].shape)
-                # print(self.camX0s_T_camXs[batch_idx].shape)
                 occ_halfmemX0_sup_, free_halfmemX0_sup_, _, _ = self.vox_utils[-1].prep_occs_supervision(
                     self.camX0s_T_camXs[batch_idx:batch_idx+1],
                     self.xyz_camXs[batch_idx:batch_idx+1],
@@ -904,7 +679,6 @@ class CarlaMocModel(nn.Module):
                     self.Z2, self.Y2, self.X2,
                     agg=True
                     )
-            # free_halfmemX0_sup_ = 1. - occ_halfmemX0_sup_
 
             self.occXs.append(occXs)
             self.unpXs.append(unpXs)
@@ -912,29 +686,8 @@ class CarlaMocModel(nn.Module):
             self.occ_halfmemX0_sup.append(occ_halfmemX0_sup_)
             self.free_halfmemX0_sup.append(free_halfmemX0_sup_)  
 
-            # self.xyz_camXs.append(xyz_camXs)
-            # self.camX0s_T_camXs.append(camX0s_T_camXs) 
-            # self.mask_valid.append(mask_valid)
-            # self.xyz_camX0s.append(xyz_camX0s)
 
             if batch_idx==0 and self.summ_writer.save_this:
-
-            #     xyz_camRs = utils.geom.apply_4x4_bmm(camRs_T_camXs, xyz_camXs)
-            #     occXs_ = self.vox_utils[-1].voxelize_xyz(xyz_camXs, self.Z4, self.Y4, self.X4)
-            #     occRs_ = self.vox_utils[-1].voxelize_xyz(xyz_camRs, self.Z4, self.Y4, self.X4)
-            #     freeXs_ = self.vox_utils[-1].get_freespace(xyz_camXs, occXs_)
-            #     freeRs_ = self.vox_utils[-1].apply_4x4_to_vox(camRs_T_camXs, freeXs_)
-            #     occXs = occXs_.unsqueeze(0)
-            #     occRs = occRs_.unsqueeze(0)
-            #     freeXs = freeXs_.unsqueeze(0)
-            #     freeRs = freeRs_.unsqueeze(0)
-
-            #     self.summ_writer.summ_occ('occ/occX0s_input', self.occXs[-1][0].squeeze().unsqueeze(0).unsqueeze(0), reduce_axes=[3])
-            #     self.summ_writer.summ_occ('occ/occX0_input', occXs[:,0], reduce_axes=[3])
-            #     self.summ_writer.summ_occ('occ/occX1_input', occXs[:,1], reduce_axes=[3])
-            #     self.summ_writer.summ_occ('occ/occR0_input', occRs[:,0], reduce_axes=[3])
-            #     self.summ_writer.summ_occ('occ/occR1_input', occRs[:,1], reduce_axes=[3])
-                # self.summ_writer.summ_occ('occ/occR_input_combined', torch.cat(occRs.unbind(1), dim=3), reduce_axes=[3])
 
                 occR0s = self.vox_utils[-1].voxelize_xyz(
                         self.xyz_camRs.reshape(self.B,-1,3), self.Z, self.Y, self.X, return_vox_ind=False)
@@ -945,24 +698,15 @@ class CarlaMocModel(nn.Module):
                 self.summ_writer.summ_occ('inputs/occX0_input', occXs[:,0], reduce_axes=[3])
                 self.summ_writer.summ_occ('inputs/occX1_T_X0_input', occX1_T_X0, reduce_axes=[3])
                 self.summ_writer.summ_occ('inputs/occX0_T_X0_input', occX0_T_X0, reduce_axes=[3])
-                # occXs = self.vox_utils[0].voxelize_xyz(self.xyz_camX0s[batch_idx], self.Z4, self.Y4, self.X4).unsqueeze(0)
-                # self.summ_writer.summ_occ('occ/occX0_0_input', occXs[:,0], reduce_axes=[3])
                 self.summ_writer.summ_occ('inputs/occX1_input', occXs[:,1], reduce_axes=[3])
 
         self.occXs = torch.cat(self.occXs, dim=0)
         self.unpXs = torch.cat(self.unpXs, dim=0)
-        # self.camX0s_T_camXs = torch.cat(self.camX0s_T_camXs, dim=0)
-        # self.xyz_camXs = torch.cat(self.xyz_camXs, dim=0)
-        # self.mask_valid = torch.cat(self.mask_valid, dim=0)
-        # self.xyz_camX0s = torch.cat(self.xyz_camX0s, dim=0)
         self.occ_halfmemX0_sup = torch.cat(self.occ_halfmemX0_sup, dim=0)
         self.free_halfmemX0_sup = torch.cat(self.free_halfmemX0_sup, dim=0)
 
         all_ok = True
         return all_ok
-
-    # def apply_vox_util_to_batch(self, function):
-    #     if function=="get_inbounds":
 
     def run_train(self, feed):
         results = dict()
@@ -970,7 +714,6 @@ class CarlaMocModel(nn.Module):
         global_step = feed['global_step']
         set_name = feed['set_name']
         total_loss = torch.tensor(0.0).cuda()
-        # st()
 
         __p = lambda x: utils.basic.pack_seqdim(x, self.B)
         __u = lambda x: utils.basic.unpack_seqdim(x, self.B)
@@ -987,8 +730,6 @@ class CarlaMocModel(nn.Module):
             assert(self.S==2)
 
             featX1_input = torch.cat([self.occXs[:,1:2], self.occXs[:,1:2]*self.unpXs[:,1:2]], dim=2)
-            # print(featX0_input.shape)
-            # featX0_input_ = __p(featX0_input)
             if use_enc3d:
                 feat3d_loss, feat_halfmemX1, _ = self.feat3dnet(
                     __p(featX1_input),
@@ -1005,7 +746,9 @@ class CarlaMocModel(nn.Module):
             feat_halfmemX0 = torch.cat([self.vox_utils[b].apply_4x4_to_vox(self.camX0s_T_camXs[b, 1:2], feat_halfmemX1[b:b+1]) for b in range(self.B)], dim=0)
             
             valid_halfmemX0 = torch.ones_like(feat_halfmemX0[:,0:1])
+            valid_halfmemX0 = torch.cat([self.vox_utils[b].apply_4x4_to_vox(self.camX0s_T_camXs[b, 1:2], valid_halfmemX0[b:b+1]) for b in range(self.B)], dim=0)
             self.summ_writer.summ_feat(f'feat3d/feat_halfmemX0_from_X1', feat_halfmemX0, valid=valid_halfmemX0, pca=True)
+            self.summ_writer.summ_oned(f'feat3d/valid_halfmemX0', valid_halfmemX0, bev=True, norm=False)
 
             total_loss += feat3d_loss
             
@@ -1019,7 +762,7 @@ class CarlaMocModel(nn.Module):
                 altvalid_halfmemX0 = torch.ones_like(altfeat_halfmemX0[:,0:1])
                 self.summ_writer.summ_feat(f'feat3d/altfeat_input', feat_memX0_input, pca=True)
                 self.summ_writer.summ_feat(f'feat3d/altfeat_output', altfeat_halfmemX0, valid=altvalid_halfmemX0, pca=True)
-                # self.summ_writer.summ_oned(f'feat3d/altvalid_halfmemX0', altvalid_halfmemX0, bev=True, norm=False)
+                self.summ_writer.summ_oned(f'feat3d/altvalid_halfmemX0', altvalid_halfmemX0, bev=True, norm=False)
 
         if hyp.do_occ:
             
@@ -1064,7 +807,6 @@ class CarlaMocModel(nn.Module):
             total_loss += emb3d_loss
 
         if hyp.do_view:
-            # featX1 = self.vox_util.apply_4x4_to_vox(self.camXs_T_camX0s[:, 1], feat_halfmemX0[:,1:2]) # get features from camX1
             assert(hyp.do_feat3d)
             # we warped the features into the canonical view
             # now we resample to the target view and decode
@@ -1090,7 +832,6 @@ class CarlaMocModel(nn.Module):
                 f'rgb',
                 # set_name=set_name,
                 )      
-            # print(rgb_e.shape)              
             total_loss += view_loss
         
         self.summ_writer.summ_scalar(f'loss', total_loss.cpu().item())
@@ -1120,7 +861,3 @@ class CarlaMocModel(nn.Module):
         else:
             # total_loss = torch.tensor(0.0).cuda()
             return None, None, False
-        
-        # # arriving at this line is bad
-        # print('weird set_name:', set_name)
-        # assert(False)

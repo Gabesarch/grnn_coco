@@ -50,6 +50,12 @@ feat3d_init = "01_m144x144x144_2e-5_O_c1_s1_mark_data_train_mark_data_train_ns_e
 view_init = ""
 occ_init = "01_m144x144x144_2e-5_O_c1_s1_mark_data_train_mark_data_train_ns_enc3d_emb3d_01_fitvox"
 
+feat3d_init = "02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_fixfeb7_16"
+occ_init = "02_m144x144x144_1e-4_O_c1_carla_and_replica_train_carla_and_replica_val_ns_fixfeb7_16"
+
+feat3d_init = "04_m144x36x144_1e-4_O_c1_s1_carla_and_replica_train_carla_and_replica_val_ns_omnidata_moc_boundsadjusted_occonly_00"
+occ_init = "04_m144x36x144_1e-4_O_c1_s1_carla_and_replica_train_carla_and_replica_val_ns_omnidata_moc_boundsadjusted_occonly_00"
+
 # # view
 # feat3d_init = "01_m144x144x144_p128x384_1e-4_O_c1_s1_V_d32_c1_mark_data_train_mark_data_train_ns_enc3d_view_00_fitvox"
 # view_init = "01_m144x144x144_p128x384_1e-4_O_c1_s1_V_d32_c1_mark_data_train_mark_data_train_ns_enc3d_view_00_fitvox"

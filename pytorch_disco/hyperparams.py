@@ -35,6 +35,8 @@ dataparallel = False
 predict_view1_only = False
 debug = False
 
+assert_cube = True
+
 Z = 128
 Y = 64
 X = 128
@@ -325,6 +327,8 @@ alpha_pos = 1.5
 beta_neg = 1.0
 high_neg = False
 maskout = False
+
+max_samples = None
 
 imgnet_v1 = True
 eval_recall_log_freq = 5

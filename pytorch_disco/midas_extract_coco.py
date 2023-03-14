@@ -30,6 +30,11 @@ from model_base import Model
 from nets.featnet import FeatNet
 
 from tqdm import tqdm
+import sys
+sys.path.append("/home/gsarch/repo/nsd/")
+from util.util import dimensionality_reduction_feats
+from sklearn.model_selection import train_test_split
+from featureprep.feature_prep import extract_feature_with_image_order
 
 
 import cv2
@@ -80,17 +85,7 @@ set_name = 'midas_all_layers' # take output of refinenet1 (path_1)
 # set_name = 'midas_all_layers_init' # take output of refinenet1 (path_1)
 set_name = 'midas_coco_DPT_Large'
 
-layers = [
-    # "layer_2",
-    # "layer_4",
-    "layer_2_rn",
-    "layer_4_rn",
-    # "path_3",
-    # "path_1",
-    # "out",
-]
 
-print("LAYERS", layers)
 
 checkpoint_dir='checkpoints/' + set_name
 log_dir='logs_grnn_coco'
@@ -100,10 +95,32 @@ save_feats = True
 plot_classes = False
 only_process_stim_ids = False
 do_dim_red = True
-log_freq = 1000 # frequency for logging tensorboard
-subj = 1 # subject number - supports: 1, 2, 7 - only for when only_process_stim_ids=True
 pool_len = 2 # avg pool length
 num_maxpool = 1 # number of max pools
+num_layers_per_batch = 1
+save_subject_pca_features = True
+save_full_features = False # save full features
+write_to_excel = False
+flip_layer_order = True
+log_freq = 30000 # frequency for logging tensorboard
+subjects = [1,2,3,4,5,6,7,8] # subjects to save pca for if save_subject_pca_features=True
+batch_size = 1 # batch size for images
+stim_dir='/user_data/yuanw3/project_outputs/NSD/output'
+
+layers = [
+    "layer_2",
+    "layer_4",
+    "layer_2_rn",
+    "layer_4_rn",
+    "path_3",
+    "path_1",
+    "out",
+]
+if flip_layer_order:
+    layers = layers[::-1]
+
+print("LAYERS", layers)
+
 
 pretrained = True
 
@@ -123,6 +140,13 @@ if not os.path.exists(output_dir):
     os.mkdir(output_dir)
 
 # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/coco.py
+def group_list(list_to_group, num_group):
+    layer_groups = list(zip(*[iter(list_to_group)]*num_group))
+    num_layers_ = sum([len(layer_groups_i) for layer_groups_i in layer_groups])
+    if num_layers_ < len(list_to_group):
+        layer_groups.append(tuple(list_to_group[num_layers_:]))
+    return layer_groups
+layer_groups = group_list(layers, num_layers_per_batch)
 
 class ImageFolderWithPaths(datasets.ImageFolder):
     """Custom dataset that includes image file paths. Extends
@@ -130,10 +154,10 @@ class ImageFolderWithPaths(datasets.ImageFolder):
     """
     def __init__(self, coco_images_path, transform):
         super(ImageFolderWithPaths, self).__init__(coco_images_path, transform=transform)
-        if only_process_stim_ids:
-            image_ids = [int(self.imgs[i][0].split('/')[-1].split('.')[0]) for i in range(len(self.imgs))]
-            idxes = [image_ids.index(cid) for cid in stim_list]
-            self.imgs = [self.imgs[idx] for idx in idxes]
+        # if only_process_stim_ids:
+        #     image_ids = [int(self.imgs[i][0].split('/')[-1].split('.')[0]) for i in range(len(self.imgs))]
+        #     idxes = [image_ids.index(cid) for cid in stim_list]
+        #     self.imgs = [self.imgs[idx] for idx in idxes]
 
     # override the __getitem__ method. this is the method that dataloader calls
     def __getitem__(self, index):
@@ -404,8 +428,8 @@ class COCO_GRNN(nn.Module):
         self.midas.eval()
         print(self.midas)
 
-        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-        self.transform = midas_transforms.default_transform
+        # midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        # self.transform = midas_transforms.default_transform
 
         # self.W = 256
         # self.H = 256
@@ -422,8 +446,8 @@ class COCO_GRNN(nn.Module):
         self.pix_T_camX[1,2] = self.H/2. 
         
 
-        self.B = 1
-        assert(self.B==1) 
+        self.B = batch_size
+        assert(self.B==1) # transform supports B=1 TODO: change this
         self.pix_T_camX = torch.from_numpy(self.pix_T_camX).cuda().unsqueeze(0).repeat(self.B,1,1).float()
 
         data_loader_transform = transforms.Compose([
@@ -475,31 +499,34 @@ class COCO_GRNN(nn.Module):
         #     layer_4_feats= np.zeros((73000,100, 12, 12), dtype=np.float32)
         #     layer_2_feats= np.zeros((73000,200, 24, 24), dtype=np.float32)
         #     file_order = np.zeros(73000)
+        for layer_batch in tqdm(layer_groups):
+            idx = 0
+            file_order = np.zeros(73000)
+            feats = {}
+            df_appends = []
+            model_names_info_table_added = []
+            for images, _, file_ids in tqdm(self.dataloader, leave=False, desc=str(layer_batch)):
 
-        feats_all = {}
-        cat_names = []
-        supcat_names = []
-        cat_ids = []
-        idx = 0
-        for images, _, file_ids in tqdm(self.dataloader):
-
-            # print('Images processed: ', idx)
+                # print('Images processed: ', idx)
 
 
-            # estimate depth
-            with torch.no_grad():
-                out_dict = self.midas(images)
+                # estimate depth
+                with torch.no_grad():
+                    feats_all = self.midas(images)
+                
+                # if True:
+                #     depth_vis = feats_all['out'].squeeze().cpu().numpy()
+                #     plt.figure(1); plt.clf()
+                #     plt.imshow(depth_vis)
+                #     plt.colorbar()
+                #     plt.savefig('images/test.png')
+                #     st()
 
-            if save_feats:
-                for layer in layers:
-                    # feats_all[layer][idx] = out_dict[layer].squeeze().detach().cpu().numpy() 
-
-                    # layer_ind = layer_map[layer]
-                    feat_memX = out_dict[layer]
+                for layer_ in layer_batch:
+                    feat_memX = feats_all[layer_]
 
                     num_spatial = len(feat_memX.shape[2:])
                     feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
-                    
                     
                     # 3d pool
                     feat_size_thresh = 200000
@@ -509,57 +536,158 @@ class COCO_GRNN(nn.Module):
                             feat_memX = self.pool3d(feat_memX)
                         elif num_spatial==2:
                             feat_memX = self.pool2d(feat_memX)
+                        elif num_spatial==1:
+                            break
+                        elif num_spatial==0:
+                            break
                         else:
                             assert(False)
                         feat_size_flat = np.prod(torch.tensor(feat_memX.shape[1:]).numpy())
 
-                    feat_memX = feat_memX.squeeze(0).cpu().numpy().astype(np.float32)
+                    feat_memX = feat_memX.cpu().numpy().astype(np.float32)
                     # print(feat_memX.shape)
 
                     if idx==0:
-                        feature_size = 73000 # tag_sizes[tag]
+                        # print("Initializing layer", layer_)
                         if num_spatial==3:
-                            c,h,w,d = feat_memX.shape
-                            feats_all[layer] = np.zeros((feature_size, c, h, w, d), dtype=np.float32)
-                            # file_order = np.zeros(73000)
+                            b,c,h,w,d = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c, h, w, d), dtype=np.float32)
                         elif num_spatial==2:
-                            c,h,w = feat_memX.shape
-                            feats_all[layer] = np.zeros((feature_size, c, h, w), dtype=np.float32)
+                            b,c,h,w = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c, h, w), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        elif num_spatial==1:
+                            b,c,h = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c, h), dtype=np.float32)
+                            # file_order = np.zeros(73000)
+                        elif num_spatial==0:
+                            b,c = feat_memX.shape
+                            feats[layer_] = np.zeros((73000, c), dtype=np.float32)
                             # file_order = np.zeros(73000)
                         else:
                             assert(False)
 
-                    feats_all[layer][idx] = feat_memX
+                    feats[layer_][idx:idx+self.B] = feat_memX
+                    file_order[idx:idx+self.B] = file_ids.detach().cpu().numpy() 
+                
 
-            
+                # if save_feats:
+                #     print(idx)
+                #     for layer in layers:
+                #         feats_all[layer][idx] = out_dict[layer].squeeze().detach().cpu().numpy() 
+                # if idx>10:
+                #     break
 
-            # if save_feats:
-            #     print(idx)
-            #     for layer in layers:
-            #         feats_all[layer][idx] = out_dict[layer].squeeze().detach().cpu().numpy() 
+                idx += 1*self.B
 
-            idx += 1*self.B
+            if save_subject_pca_features:
+                print("Saving features")
 
-        if save_feats:
-            for layer in layers:
-                feats = feats_all[layer]
-                # if block_average:
-                #     print("Block averaging...")
-                #     cur_feat_len = feats.shape[0]
-                #     new_feat_len = cur_feat_len/block_average_len
-                #     assert(new_feat_len.is_integer())
-                #     new_feat_len = int(new_feat_len)
-                #     indices_blocks = np.arange(0, cur_feat_len+1, block_average_len)
-                #     new_dims = list(feats.shape[1:])
-                #     new_dims = [new_feat_len] + new_dims
-                #     feats_ = np.zeros(new_dims)
-                #     for ii in range(new_feat_len):
-                #         feats_[ii] = np.mean(feats[indices_blocks[ii]:indices_blocks[ii+1]], axis=0)
-                #     if zscore_after_block_averaging:
-                #         feats_ = scipy.stats.zscore(feats_, axis=0)
-                #     feats = feats_
-                #     print("new feature length is:", feats.shape)
-                np.save(f'{output_dir}/{layer}.npy', feats)
+                for layer_ in layer_batch:
+
+                    for subj in subjects:
+
+                        print(f"Saving layer {layer_}, subject {subj}")
+
+                        pca_train_file_path =  f"{output_dir}/{layer_}_subj{subj}_train_pca.npy"
+                        pca_test_file_path =  f"{output_dir}/{layer_}_subj{subj}_test_pca.npy"
+                        pca_fit_path = f"{output_dir}/{layer_}_subj{subj}_pca_fit.p" # path to pca model
+
+                        if os.path.isfile(pca_train_file_path) and os.path.isfile(pca_test_file_path):
+                            print(f"{pca_train_file_path} exists. delete old file to regenerate.")
+                            continue
+
+                        stimulus_list = np.load(
+                            "%s/coco_ID_of_repeats_subj%02d.npy" % (stim_dir, subj)
+                        )
+                        feature_mat = extract_feature_with_image_order(
+                            stimulus_list, feats[layer_], file_order, 
+                        )
+
+                        # split train and test set
+                        X_train, X_test = train_test_split(
+                            feature_mat, test_size=0.15, random_state=42
+                        )
+
+                        _,_ = dimensionality_reduction_feats(X_train, X_test, layer_, pca_train_file_path, pca_test_file_path, pca_fit_path, method='pca', override_existing_pca=True)
+
+                        del feature_mat, X_train, X_test
+
+                        if write_to_excel:
+                            entry_name = f'{model_load}_{layer_}'
+                            if (entry_name in model_info_table['model_name'].tolist()) or (entry_name in model_names_info_table_added):
+                                print("entry already exists.. skipping")
+                            else:
+                                # last_index = model_info_table[model_info_table.keys()[0]].keys()[-1]
+                                data_to_append = [[entry_name, general_model_name, f'{output_dir}/{layer_}.npy', f'{output_dir}/file_order.npy', dataset, 'all_pca', '', '']]
+                                df_append = pandas.DataFrame(data_to_append, columns=list(model_info_table.keys()))
+                                df_appends.append(df_append)
+                                model_names_info_table_added.append(entry_name)
+                                # model_info_table = model_info_table.append(df_append, ignore_index=True)
+
+            if save_full_features:
+                
+                for layer_ in layer_batch:
+                    print("Saving full features ", layer_)
+                    np.save(f'{output_dir}/{layer_}.npy', feats[layer_])
+
+                    if write_to_excel:
+                        entry_name = f'{model_load}_{layer_}'
+                        if (entry_name in model_info_table['model_name'].tolist()) or (entry_name in model_names_info_table_added):
+                            print("entry already exists.. skipping")
+                        else:
+                            # last_index = model_info_table[model_info_table.keys()[0]].keys()[-1]
+                            data_to_append = [[entry_name, general_model_name, f'{output_dir}/{layer_}.npy', f'{output_dir}/file_order.npy', dataset, 'all_pca', '', '']]
+                            df_append = pandas.DataFrame(data_to_append, columns=['model_name', 'model', 'feature_path', 'feature_order_path', 'dataset', 'subjects', 'size', 'description'])
+                            df_appends.append(df_append)
+                            model_names_info_table_added.append(entry_name)
+                            # with pandas.ExcelWriter(model_info_file, mode='a', engine="openpyxl", if_sheet_exists='overlay') as writer:
+                            #     df_append.to_excel(writer, sheet_name='Sheet1')
+                            # model_info_table = model_info_table.append(df_append, ignore_index=True)
+
+            np.save(f'{output_dir}/file_order.npy', file_order)
+
+            if write_to_excel:
+                # model_info_table = model_info_table.drop('Unnamed: 0.1', 1)
+                # model_info_table = model_info_table.drop('Unnamed: 0', 1)
+                # model_info_table.reset_index(drop=True, inplace=True)
+                # model_info_table = model_info_table.drop(np.arange(180, 182), 0)
+                model_info_table = pandas.read_excel(model_info_file)
+                if 'Unnamed: 0' in model_info_table.keys():
+                    model_info_table = model_info_table.drop('Unnamed: 0', 1)
+                for df_append in df_appends:
+                    model_info_table = model_info_table.append(df_append, ignore_index=True)
+                with pandas.ExcelWriter(model_info_file, engine="openpyxl") as writer:
+                    model_info_table.to_excel(writer)
+                # writer = pandas.ExcelWriter(model_info_file)
+                # model_info_table.to_excel(writer)
+                # writer.save()
+                # writer.close()
+                # writer.handles = None
+                # with pandas.ExcelWriter(model_info_file, mode='a') as writer:
+                #     df.to_excel(writer, sheet_name='Sheet3')
+                print('DataFrame is written successfully to Excel File.')
+
+        # if save_feats:
+        #     for layer in layers:
+        #         feats = feats_all[layer]
+        #         # if block_average:
+        #         #     print("Block averaging...")
+        #         #     cur_feat_len = feats.shape[0]
+        #         #     new_feat_len = cur_feat_len/block_average_len
+        #         #     assert(new_feat_len.is_integer())
+        #         #     new_feat_len = int(new_feat_len)
+        #         #     indices_blocks = np.arange(0, cur_feat_len+1, block_average_len)
+        #         #     new_dims = list(feats.shape[1:])
+        #         #     new_dims = [new_feat_len] + new_dims
+        #         #     feats_ = np.zeros(new_dims)
+        #         #     for ii in range(new_feat_len):
+        #         #         feats_[ii] = np.mean(feats[indices_blocks[ii]:indices_blocks[ii+1]], axis=0)
+        #         #     if zscore_after_block_averaging:
+        #         #         feats_ = scipy.stats.zscore(feats_, axis=0)
+        #         #     feats = feats_
+        #         #     print("new feature length is:", feats.shape)
+        #         np.save(f'{output_dir}/{layer}.npy', feats)
 
 
             # if only_process_stim_ids:
